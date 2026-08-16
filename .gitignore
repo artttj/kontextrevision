@@ -1,0 +1,5 @@
+docs/superpowers/
+*.bak
+*.bak.*
+__pycache__/
+.pytest_cache/

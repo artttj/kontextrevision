@@ -1,0 +1,13 @@
+{
+  "name": "kontextrevision",
+  "owner": {
+    "name": "artttj"
+  },
+  "plugins": [
+    {
+      "name": "kontextrevision",
+      "source": "./",
+      "description": "Revises SOUL.md, AGENTS.md, and CLAUDE.md in place, with git, keep-marker, and growth guards."
+    }
+  ]
+}
