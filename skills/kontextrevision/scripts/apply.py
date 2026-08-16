@@ -3,6 +3,7 @@
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
@@ -214,6 +215,9 @@ def write_atomic(path: str, content: str) -> str:
         fh.write(content)
     os.chmod(tmp, mode)
     os.replace(tmp, path)
+    with open(backup + ".txn", "w", encoding="utf-8") as fh:
+        json.dump({"post_write_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest()}, fh)
+        fh.write("\n")
     return backup
 
 
@@ -230,13 +234,7 @@ def _result(status, reason, before, after, backup=None):
 
 
 def rollback(path):
-    """Restore the most recent backup, then delete it.
-
-    A move across two files leaves the source rewritten if the destination write
-    is refused. Restoring through apply_file cannot work, because the source is
-    now git-dirty and would hit that guard. Restoring the known-good backup is
-    safe by construction, so it bypasses the guards deliberately.
-    """
+    """Restore the newest backup only when the written revision is unchanged."""
     base = path + ".bak"
     existing = []
     for candidate in glob.glob(base + "*"):
@@ -249,13 +247,30 @@ def rollback(path):
     if not existing:
         return _result("refused", "no backup found for {0}".format(path), 0, 0)
     backup = max(existing, key=lambda item: item[0])[1]
+    transaction = backup + ".txn"
+    try:
+        with open(transaction, "r", encoding="utf-8") as fh:
+            expected = json.load(fh)["post_write_sha256"]
+    except (IOError, OSError, KeyError, TypeError, ValueError):
+        return _result("refused", "backup has no valid transaction metadata", 0, 0)
+    try:
+        with open(path, "rb") as fh:
+            current = hashlib.sha256(fh.read()).hexdigest()
+    except (IOError, OSError):
+        return _result("refused", "cannot read current file before rollback", 0, 0)
+    if current != expected:
+        return _result("refused", "file changed since the guarded write; rollback would lose edits",
+                       0, 0)
     with open(backup, "r", encoding="utf-8") as fh:
         content = fh.read()
+    mode = stat.S_IMODE(os.stat(backup).st_mode)
     tmp = "{0}.tmp.{1}".format(path, os.getpid())
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(content)
+    os.chmod(tmp, mode)
     os.replace(tmp, path)
     os.remove(backup)
+    os.remove(transaction)
     return _result("rolled_back", None, 0, estimate_tokens(content))
 
 
