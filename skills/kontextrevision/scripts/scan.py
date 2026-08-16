@@ -6,6 +6,7 @@ loading them all into an agent's context defeats the purpose of tidying them.
 """
 
 import hashlib
+import argparse
 import json
 import os
 import re
@@ -18,6 +19,13 @@ SKIP_DIRS = {".git", "node_modules", "vendor", ".venv", "venv", "__pycache__", "
 SOUL_NAMES = {"soul.md"}
 AGENTS_NAMES = {"agents.md"}
 CLAUDE_NAMES = {"claude.md", ".claude.md", ".claude.local.md"}
+
+ROLE_HARNESSES = {
+    "agents": ["codex", "opencode"],
+    "claude": ["claude-code"],
+    "rules": ["claude-code"],
+    "soul": ["nous"],
+}
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 
@@ -116,12 +124,16 @@ def parse_sections(text: str) -> List[Dict]:
     out = []
     for sec in sections:
         body = "\n".join(sec["body"])
-        norm = normalize_body(body)
+        heading = sec["heading"] or ""
+        exact = "{0}\0{1}\0{2}".format(sec["level"], heading, body)
+        normalized = "{0}\0{1}\0{2}".format(
+            sec["level"], normalize_body(heading), normalize_body(body))
         out.append({
             "heading": sec["heading"],
             "level": sec["level"],
             "line": sec["line"],
-            "hash": hashlib.sha256(norm.encode("utf-8")).hexdigest()[:12],
+            "exact_hash": hashlib.sha256(exact.encode("utf-8")).hexdigest()[:12],
+            "normalized_hash": hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12],
             "bytes": len(body.encode("utf-8")),
         })
     return out
@@ -353,6 +365,77 @@ def digest_file(path: str) -> Dict:
     }
 
 
+def _scan_root(root: str) -> str:
+    """Return the directory that bounds instruction scope discovery."""
+    absolute = os.path.abspath(root)
+    return os.path.dirname(absolute) if os.path.isfile(absolute) else absolute
+
+
+def _relative_directory(path: str, root: str) -> str:
+    relative = os.path.relpath(os.path.dirname(path), root).replace(os.sep, "/")
+    return "." if relative == "." else relative
+
+
+def _contains(directory: str, path: str) -> bool:
+    """Return whether path is within directory without prefix-string mistakes."""
+    try:
+        return os.path.commonpath([directory, path]) == directory
+    except ValueError:
+        return False
+
+
+def instruction_metadata(path: str, root: str, cwd: str) -> Dict:
+    """Describe scope, harness coverage, and current load condition for a file."""
+    role = classify_role(path)
+    directory = os.path.abspath(os.path.dirname(path))
+    scope_path = _relative_directory(path, root)
+    if role == "soul":
+        scope = "global"
+        condition = "effective_now"
+    elif role == "rules":
+        scope = "project"
+        scope_path = "."
+        condition = "conditional"
+    else:
+        scope = "project" if directory == root else "subtree"
+        condition = "effective_now" if _contains(directory, cwd) else "conditional"
+    return {
+        "scope": scope,
+        "scope_path": scope_path,
+        "harnesses": ROLE_HARNESSES.get(role, []),
+        "load_condition": condition,
+    }
+
+
+def _scope_graph(files: List[Dict], root: str) -> List[Dict]:
+    """Return nearest instruction ancestors for every harness-visible file."""
+    graph = []
+    for current in files:
+        parents = {}
+        current_dir = os.path.dirname(current["path"])
+        for harness in current["harnesses"]:
+            candidates = []
+            for other in files:
+                if other is current or harness not in other["harnesses"]:
+                    continue
+                other_dir = os.path.dirname(other["path"])
+                if other_dir != current_dir and _contains(other_dir, current_dir):
+                    candidates.append(other)
+            parent = max(candidates, key=lambda item: len(os.path.dirname(item["path"])),
+                         default=None)
+            parents[harness] = None if parent is None else os.path.relpath(
+                parent["path"], root).replace(os.sep, "/")
+        graph.append({
+            "path": os.path.relpath(current["path"], root).replace(os.sep, "/"),
+            "scope": current["scope"],
+            "scope_path": current["scope_path"],
+            "harnesses": current["harnesses"],
+            "load_condition": current["load_condition"],
+            "parents": parents,
+        })
+    return graph
+
+
 def _find_mirrors(files: List[Dict], root: str):
     """Pair AGENTS.md with an identical CLAUDE.md in the same directory.
 
@@ -363,7 +446,8 @@ def _find_mirrors(files: List[Dict], root: str):
     by_dir = {}
     for f in files:
         by_dir.setdefault(os.path.dirname(f["path"]), {})[f["role"]] = f
-    mirrors, saved = [], 0
+    mirrors = []
+    saved = {"effective_now": 0, "conditional": 0}
     for directory, roles in sorted(by_dir.items()):
         a, c = roles.get("agents"), roles.get("claude")
         if not a or not c:
@@ -373,33 +457,52 @@ def _find_mirrors(files: List[Dict], root: str):
                 os.path.relpath(a["path"], root).replace(os.sep, "/"),
                 os.path.relpath(c["path"], root).replace(os.sep, "/"),
             ])
-            saved += min(a["est_tokens"], c["est_tokens"])
+            if a["load_condition"] == c["load_condition"]:
+                saved[a["load_condition"]] += min(a["est_tokens"], c["est_tokens"])
     return mirrors, saved
 
 
-def build_digest(root: str) -> Dict:
+def build_digest(root: str, cwd: Optional[str] = None) -> Dict:
     """Digest everything under root that costs tokens on every session.
 
     Instruction files and harness definitions are both always-on, but a
     definition's body is not: it loads only when invoked. The two are reported
     separately so they are never compared as though they cost the same.
     """
+    scope_root = _scan_root(root)
+    selected_cwd = os.path.abspath(cwd or scope_root)
+    if not _contains(scope_root, selected_cwd):
+        raise ValueError("--cwd must be inside the scan root")
     files = []
     for p in discover(root):
         try:
-            files.append(digest_file(p))
+            entry = digest_file(p)
+            entry.update(instruction_metadata(p, scope_root, selected_cwd))
+            files.append(entry)
         except (IOError, OSError):
             continue
     harness = build_harness_digest(root)
     mirrors, mirrored_away = _find_mirrors(files, root)
-    instruction_tokens = sum(f["est_tokens"] for f in files) - mirrored_away
+    effective = sum(f["est_tokens"] for f in files
+                    if f["load_condition"] == "effective_now") \
+        - mirrored_away["effective_now"]
+    conditional = sum(f["est_tokens"] for f in files
+                      if f["load_condition"] == "conditional") \
+        - mirrored_away["conditional"]
+    instruction_tokens = effective + conditional
     return {
         "root": root,
+        "cwd": selected_cwd,
         "files": files,
+        "scope_graph": _scope_graph(files, scope_root),
         "definitions": harness["definitions"],
         "instruction_tokens": instruction_tokens,
         "description_tokens": harness["always_on_tokens"],
-        "always_on_tokens": instruction_tokens + harness["always_on_tokens"],
+        "effective_now_tokens": effective,
+        "conditionally_loaded_tokens": conditional,
+        "skill_description_tokens": harness["always_on_tokens"],
+        "on_demand_body_tokens": harness["on_demand_tokens"],
+        "always_on_tokens": effective + harness["always_on_tokens"],
         "on_demand_tokens": harness["on_demand_tokens"],
         "duplicates": harness["duplicates"],
         "mirrors": mirrors,
@@ -408,9 +511,16 @@ def build_digest(root: str) -> Dict:
 
 
 def main(argv: List[str]) -> int:
-    args = [a for a in argv[1:] if not a.startswith("-")]
-    root = args[0] if args else "."
-    payload = build_harness_digest(root) if "--harness" in argv else build_digest(root)
+    parser = argparse.ArgumentParser(description="Scan agent instruction context without reading bodies into output.")
+    parser.add_argument("root", nargs="?", default=".")
+    parser.add_argument("--cwd")
+    parser.add_argument("--harness", action="store_true")
+    args = parser.parse_args(argv[1:])
+    try:
+        payload = build_harness_digest(args.root) if args.harness \
+            else build_digest(args.root, cwd=args.cwd)
+    except ValueError as exc:
+        parser.error(str(exc))
     sys.stdout.write(json.dumps(payload, indent=2))
     sys.stdout.write("\n")
     return 0

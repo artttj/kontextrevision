@@ -47,16 +47,28 @@ def test_parse_sections_splits_on_headings():
     assert secs[1]["line"] == 3
 
 
-def test_parse_sections_hash_ignores_whitespace_differences():
+def test_parse_sections_normalized_hash_ignores_whitespace_differences():
     a = scan.parse_sections("# H\nsame   body\n")
     b = scan.parse_sections("# H\n\n  same body  \n\n")
-    assert a[0]["hash"] == b[0]["hash"]
+    assert a[0]["normalized_hash"] == b[0]["normalized_hash"]
+    assert a[0]["exact_hash"] != b[0]["exact_hash"]
 
 
 def test_parse_sections_different_content_differs():
     a = scan.parse_sections("# H\nalpha\n")
     b = scan.parse_sections("# H\nbeta\n")
-    assert a[0]["hash"] != b[0]["hash"]
+    assert a[0]["exact_hash"] != b[0]["exact_hash"]
+    assert a[0]["normalized_hash"] != b[0]["normalized_hash"]
+
+
+def test_parse_sections_hashes_include_heading_and_level():
+    heading_a = scan.parse_sections("# Python\nsame body\n")[0]
+    heading_b = scan.parse_sections("# Rust\nsame body\n")[0]
+    level_b = scan.parse_sections("## Python\nsame body\n")[0]
+    assert heading_a["exact_hash"] != heading_b["exact_hash"]
+    assert heading_a["normalized_hash"] != heading_b["normalized_hash"]
+    assert heading_a["exact_hash"] != level_b["exact_hash"]
+    assert heading_a["normalized_hash"] != level_b["normalized_hash"]
 
 
 def test_parse_sections_no_preamble_when_file_starts_with_heading():
@@ -275,7 +287,7 @@ def test_build_digest_includes_harness_by_default(tmp_path):
     assert len(d["definitions"]) == 2
     assert d["instruction_tokens"] > 0
     assert d["description_tokens"] > 0
-    assert d["always_on_tokens"] == d["instruction_tokens"] + d["description_tokens"]
+    assert d["always_on_tokens"] == d["effective_now_tokens"] + d["skill_description_tokens"]
     assert d["on_demand_tokens"] > 0
 
 
@@ -291,7 +303,7 @@ def test_build_digest_works_with_no_definitions(tmp_path):
     d = scan.build_digest(str(tmp_path))
     assert d["definitions"] == []
     assert d["description_tokens"] == 0
-    assert d["always_on_tokens"] == d["instruction_tokens"]
+    assert d["always_on_tokens"] == d["effective_now_tokens"]
 
 
 def test_classify_definition_requires_conventional_location():
@@ -399,3 +411,84 @@ def test_frontmatter_description_stops_at_dotted_and_underscored_keys(tmp_path):
     p = write(tmp_path, "skills/y/SKILL.md",
               "---\ndescription: just this\nmodel_name: opus\n---\nbody\n")
     assert scan.digest_definition(p)["description"] == "just this"
+
+
+def test_root_instructions_are_effective_and_descendants_are_conditional(tmp_path):
+    root = write(tmp_path, "AGENTS.md", "# Root\n" + "root rule\n" * 20)
+    child = write(tmp_path, "packages/api/AGENTS.md", "# API\n" + "api rule\n" * 20)
+    d = scan.build_digest(str(tmp_path))
+    by_path = {f["path"]: f for f in d["files"]}
+    assert by_path[root]["scope"] == "project"
+    assert by_path[root]["load_condition"] == "effective_now"
+    assert by_path[root]["harnesses"] == ["codex", "opencode"]
+    assert by_path[child]["scope"] == "subtree"
+    assert by_path[child]["scope_path"] == "packages/api"
+    assert by_path[child]["load_condition"] == "conditional"
+    assert d["effective_now_tokens"] == by_path[root]["est_tokens"]
+    assert d["conditionally_loaded_tokens"] == by_path[child]["est_tokens"]
+
+
+def test_cwd_activates_instruction_files_on_its_path(tmp_path):
+    root = write(tmp_path, "AGENTS.md", "# Root\nroot\n")
+    package = write(tmp_path, "packages/AGENTS.md", "# Packages\npackages\n")
+    api = write(tmp_path, "packages/api/AGENTS.md", "# API\napi\n")
+    other = write(tmp_path, "packages/web/AGENTS.md", "# Web\nweb\n")
+    cwd = os.path.join(str(tmp_path), "packages", "api", "src")
+    os.makedirs(cwd)
+    d = scan.build_digest(str(tmp_path), cwd=cwd)
+    by_path = {f["path"]: f for f in d["files"]}
+    assert by_path[root]["load_condition"] == "effective_now"
+    assert by_path[package]["load_condition"] == "effective_now"
+    assert by_path[api]["load_condition"] == "effective_now"
+    assert by_path[other]["load_condition"] == "conditional"
+    assert d["scope_graph"][2]["parents"]["codex"] == "packages/AGENTS.md"
+
+
+def test_instruction_roles_report_harness_coverage(tmp_path):
+    write(tmp_path, "SOUL.md", "# Voice\nDirect.\n")
+    write(tmp_path, "AGENTS.md", "# Project\nRules.\n")
+    write(tmp_path, "CLAUDE.md", "# Claude\nRules.\n")
+    write(tmp_path, ".claude/rules/web.md", "# Web\nRules.\n")
+    d = scan.build_digest(str(tmp_path))
+    coverage = {f["role"]: f["harnesses"] for f in d["files"]}
+    assert coverage == {
+        "agents": ["codex", "opencode"],
+        "claude": ["claude-code"],
+        "rules": ["claude-code"],
+        "soul": ["nous"],
+    }
+
+
+def test_mirror_tokens_are_counted_once_in_scope_tiers(tmp_path):
+    body = "# Shared\n" + "same rule\n" * 20
+    write(tmp_path, "AGENTS.md", body)
+    write(tmp_path, "CLAUDE.md", body)
+    write(tmp_path, "sub/AGENTS.md", body)
+    write(tmp_path, "sub/CLAUDE.md", body)
+    d = scan.build_digest(str(tmp_path))
+    tokens = scan.estimate_tokens(body)
+    assert d["effective_now_tokens"] == tokens
+    assert d["conditionally_loaded_tokens"] == tokens
+
+
+def test_build_digest_rejects_cwd_outside_scan_root(tmp_path):
+    root = os.path.join(str(tmp_path), "repo")
+    outside = os.path.join(str(tmp_path), "outside")
+    os.makedirs(root)
+    os.makedirs(outside)
+    write(root, "AGENTS.md", "# Rules\n")
+    with pytest.raises(ValueError, match="inside the scan root"):
+        scan.build_digest(root, cwd=outside)
+
+
+def test_cli_cwd_selects_effective_scope(tmp_path):
+    write(tmp_path, "AGENTS.md", "# Root\nroot\n")
+    write(tmp_path, "sub/AGENTS.md", "# Sub\nsub\n")
+    script = os.path.join(os.path.dirname(__file__), "..", "skills", "kontextrevision", "scripts", "scan.py")
+    proc = subprocess.run(
+        [sys.executable, script, str(tmp_path), "--cwd", os.path.join(str(tmp_path), "sub")],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout)
+    assert all(f["load_condition"] == "effective_now" for f in payload["files"])
