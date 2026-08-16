@@ -27,9 +27,10 @@ CODE_SPAN_RE = re.compile(r"`([^`\n]{1,120})`")
 
 COMMAND_RE = re.compile(
     r"^((?:npm|yarn|pnpm)\s+(?:run\s+)?[\w:.-]+"
-    r"|make\s+[\w:.-]+"
-    r"|composer\s+[\w:.-]+"
-    r"|pytest(?:\s+[\w:./-]+)?)$"
+    r"(?:\s+[-\w@:./=]+)*"
+    r"|(?:make|composer|pytest|cargo|git|python|python3)\s+[-\w@:./=]+"
+    r"(?:\s+[-\w@:./=]+)*"
+    r"|docker\s+(?:compose\s+)?[-\w@:./=]+(?:\s+[-\w@:./=]+)*)$"
 )
 
 PATH_RE = re.compile(
@@ -131,8 +132,6 @@ def estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
-# Prose words that follow a runner verb often enough to produce false matches.
-# "make sure the tests pass" is English; "make lint" is a command.
 TARGET_STOPWORDS = {
     "commands", "command", "sure", "it", "the", "a", "an", "this", "that",
     "use", "your", "any", "all", "them", "these", "those", "some", "more",

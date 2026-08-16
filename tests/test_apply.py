@@ -3,10 +3,12 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "skills", "kontextrevision", "scripts"))
 
-import apply  # noqa: E402
-from conftest import write  # noqa: E402
+import apply
+from conftest import write
 
 
 def git_init(tmp_path):
@@ -295,6 +297,29 @@ def test_apply_refuses_rewrite_that_invents_a_command(tmp_path):
     assert "invent" in res["reason"]
 
 
+@pytest.mark.parametrize("command", [
+    "pytest tests/",
+    "cargo test",
+    "git push --force",
+    "python manage.py migrate",
+    "docker compose down",
+])
+def test_apply_refuses_common_invented_commands(tmp_path, command):
+    original = "# Rules\n" + "Be careful with deployment and repository operations.\n" * 12
+    rewritten = "# Rules\n" + "Run `{0}` before release.\n".format(command) * 12
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "refused"
+    assert "invent" in res["reason"]
+
+
+def test_apply_refuses_invented_command_in_fence(tmp_path):
+    original = "# Rules\n" + "Follow the release policy carefully.\n" * 12
+    rewritten = "# Rules\n```bash\nmake deploy\n```\n" + "Follow the policy.\n" * 12
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "refused"
+    assert "invent" in res["reason"]
+
+
 def test_apply_allows_invented_command_when_opted_in(tmp_path):
     target = write(tmp_path, "AGENTS.md", "# Rules\n" + "Be careful with the whole database here.\n" * 12)
     invented = "# Rules\n" + "Never migrate without `make db-dry`.\n" * 12
@@ -305,6 +330,20 @@ def test_apply_allows_rewrite_reusing_an_existing_command(tmp_path):
     target = write(tmp_path, "AGENTS.md", "# Rules\n" + "Run `make lint` sometimes, maybe, ok.\n" * 12)
     tightened = "# Rules\n" + "Run `make lint` before each commit.\n" * 12
     assert apply.apply_file(target, tightened)["status"] == "written"
+
+
+@pytest.mark.parametrize("command", [
+    "pytest tests/",
+    "cargo test",
+    "git push --force",
+    "python manage.py migrate",
+    "docker compose down",
+])
+def test_apply_allows_reusing_common_command(tmp_path, command):
+    original = "# Rules\n" + "Sometimes run `{0}` before release.\n".format(command) * 12
+    rewritten = "# Rules\n" + "Run `{0}` before release.\n".format(command) * 12
+    target = write(tmp_path, "AGENTS.md", original)
+    assert apply.apply_file(target, rewritten)["status"] == "written"
 
 
 def test_rollback_restores_from_backup_despite_dirty_guard(tmp_path):

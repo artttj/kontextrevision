@@ -3,10 +3,12 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "skills", "kontextrevision", "scripts"))
 
-import scan  # noqa: E402
-from conftest import write  # noqa: E402
+import scan
+from conftest import write
 
 
 def test_classify_role_by_basename():
@@ -74,6 +76,21 @@ def test_extract_commands_finds_runners():
     assert "npm run build" in cmds
     assert "make lint" in cmds
     assert "composer install" in cmds
+
+
+@pytest.mark.parametrize("command", [
+    "pytest tests/",
+    "cargo test",
+    "git push --force",
+    "python manage.py migrate",
+    "docker compose down",
+])
+def test_extract_commands_recognizes_common_commands(command):
+    assert scan.extract_commands("Run `{0}`.".format(command)) == [command]
+
+
+def test_extract_commands_reads_fenced_commands():
+    assert scan.extract_commands("```bash\nmake deploy\n```") == ["make deploy"]
 
 
 def test_extract_commands_deduplicates():
