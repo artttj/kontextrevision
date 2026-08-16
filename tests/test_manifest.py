@@ -11,6 +11,7 @@ def test_plugin_manifest_is_valid_json_with_required_keys():
     assert data["name"] == "kontextrevision"
     assert data["version"]
     assert data["description"]
+    assert data["author"] == {"name": "Artem Iagovdik", "url": "https://github.com/artttj"}
 
 
 def test_plugin_versions_match_release():
@@ -44,6 +45,7 @@ def test_marketplace_manifest_lists_the_plugin():
     with open(os.path.join(ROOT, ".claude-plugin", "marketplace.json"), encoding="utf-8") as fh:
         data = json.load(fh)
     assert data["name"] == "kontextrevision"
+    assert data["description"]
     assert "kontextrevision" in [p["name"] for p in data["plugins"]]
 
 

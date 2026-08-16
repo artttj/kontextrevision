@@ -2,6 +2,9 @@
   "name": "kontextrevision",
   "version": "1.0.0",
   "description": "Reviews and revises agent instruction stacks: structure clarified, dead context removed, scope corrected, and cross-harness conflicts surfaced.",
-  "author": "Artem Iagovdik",
+  "author": {
+    "name": "Artem Iagovdik",
+    "url": "https://github.com/artttj"
+  },
   "license": "MIT"
 }

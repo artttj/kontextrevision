@@ -3,6 +3,7 @@
   "owner": {
     "name": "artttj"
   },
+  "description": "Agent context architecture review and guarded instruction revision.",
   "plugins": [
     {
       "name": "kontextrevision",
