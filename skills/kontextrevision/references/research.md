@@ -51,10 +51,10 @@ From this project's own corpus scan, documented in `docs/proof/`:
 
 | Finding | Number |
 |---|---|
-| `AGENTS.md` median / p90 / largest | 1,027 / 4,100 / 28,430 tokens |
-| `CLAUDE.md` median / p90 / largest | 1,387 / 5,692 / 28,592 tokens |
-| `SOUL.md` median / p90 / largest | 641 / 2,665 / 4,599 tokens |
-| Command references pointing at nothing | 3.6% |
+| `AGENTS.md` median / p90 / largest | 1,044 / 4,100 / 28,430 tokens |
+| `CLAUDE.md` median / p90 / largest | 1,387 / 5,095 / 28,592 tokens |
+| `SOUL.md` median / p90 / largest | 641 / 2,647 / 4,599 tokens |
+| Recognized command references | 738, without a missing-command verdict |
 | Sections in a single file, maximum | 92 |
 | Files containing invisible Unicode | 0 of 250 |
 

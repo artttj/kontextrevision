@@ -2,78 +2,67 @@
 
 **Date:** 2026-08-16
 **Author:** Artem Iagovdik
-**Method:** GitHub code search for `AGENTS.md`, `CLAUDE.md`, `SOUL.md`, one file per repo, 250 repos. Scanned with `scan.py`. Command claims verified against each repo's real `package.json` and `Makefile`.
 
-Every number here survived a deliberate attempt to break it. Two of my first four "findings" turned out to be false and were thrown out. That process is documented at the bottom, because it is the most useful part.
+## Method
+
+The corpus contains 100 `AGENTS.md`, 100 `CLAUDE.md`, and 50 `SOUL.md` files
+from 250 distinct repositories. Files came from GitHub code search in API result
+order, with one file retained per repository across the whole sample. Each file
+was fetched from its repository's current default branch and scanned with
+`scan.py`.
+
+Token counts use the scanner's documented character-count estimate. The p90 is
+the nearest-rank 90th percentile. GitHub search order and repository contents
+change, so these figures describe the dated snapshot rather than a permanent
+population estimate.
 
 ## Size
 
-These files are injected into the system prompt on **every session**. Size is a recurring cost, not a one-time one.
+| File | Count | Median | p90 | Largest |
+|---|---:|---:|---:|---:|
+| `AGENTS.md` | 100 | 1,044 tok | 4,100 tok | 28,430 tok |
+| `CLAUDE.md` | 100 | 1,387 tok | 5,095 tok | 28,592 tok |
+| `SOUL.md` | 50 | 641 tok | 2,647 tok | 4,599 tok |
 
-| File | Median | p90 | Largest |
-|---|---|---|---|
-| `AGENTS.md` (n=100) | 1,027 tok | 4,100 tok | 28,430 tok |
-| `CLAUDE.md` (n=100) | 1,387 tok | 5,692 tok | 28,592 tok |
-| `SOUL.md` (n=50) | 641 tok | 2,665 tok | 4,599 tok |
+The corpus contains an estimated 473,322 tokens. The median file has 9 Markdown
+sections, and the largest has 92.
 
-Median sections per file: 9. Largest: **92 sections in one file.**
+[`joe-bell/cva`](https://github.com/joe-bell/cva) remains the clearest large-file
+example in the sample at an estimated 8,176 tokens.
 
-Corpus total: 465,901 tokens across 250 files.
+## Commands are references, not verdicts
 
-### The clearest example
+The revised extractor found 738 recognized command references across the 250
+files. This is not a missing-command count.
 
-[`joe-bell/cva`](https://github.com/joe-bell/cva) (6,874★) ships an **8,176-token `AGENTS.md`**. Nothing is wrong with it. It is simply read, in full, at the start of every session anybody runs against that repo.
+Determining whether a command exists requires resolving the repository's actual
+manifest. Makefile includes can nest, and included paths can live in git
+submodules that are unavailable through a raw file request. Package scripts can
+also be inherited through workspaces. The scanner reports references for later
+inspection and does not claim that any command is broken.
 
-## Dead commands
+Earlier measurement attempts demonstrated why that boundary matters:
 
-Instruction files tell agents which commands to run. Some of those commands do not exist.
+- prose such as `make sure` can resemble a command without code-span filtering
+- one-level Makefile inspection misses nested includes
+- raw HTTP cannot see files stored only in a git submodule
+- fenced shell comments can resemble Markdown headings
 
-| Runner | Files checked | Commands checked | Dead |
-|---|---|---|---|
-| npm/yarn/pnpm | 26 | 129 | 6 (4.7%) |
-| make | 20 | 94 | 2 (2.1%) |
+The published missing-command percentage was removed after command extraction
+expanded. Reusing it with a broader parser would mix two different measurements.
 
-**8 of 223 verifiable command references (3.6%) point at nothing.** A further 11 files with `make` commands were **skipped rather than judged**, because their Makefiles could not be fully resolved (see methodology).
+## Negative check
 
-### Verified cases
+None of the 250 files contained zero-width spaces, zero-width joiners,
+byte-order marks, or non-breaking spaces. The project does not include an
+invisible-Unicode cleanup feature on this evidence.
 
-| Repo | File says | Reality |
-|---|---|---|
-| [RedHatInsights/insights-chrome](https://github.com/RedHatInsights/insights-chrome) | `npm run test:e2e` (CLAUDE.md:134) | No such script. `package.json` has `test:playwright`, `test:ct`. No workspaces. |
-| [egraphs-good/egglog](https://github.com/egraphs-good/egglog) (817★) | `make major` | Makefile has no includes. Targets are `all`, `nightly`, `test`, `coverage`, `doctest`, `nits`, `docs`, `graphs`, `json`. |
-| [thumbor/libthumbor](https://github.com/thumbor/libthumbor) | `make test`, `make flake8` | Makefile has no includes. Targets are `unit`, `coverage`, `setup`, `black`, `pylint`, `lint`. |
-
-## Two things that turned out not to be problems
-
-**Invisible Unicode: 0 of 250 files.** Zero-width spaces, non-breaking spaces, and Unicode tag characters appear in none of them. A separate scan of 85 local instruction files also found zero. 335 files, no hits. A planned scrubbing feature was cut on this evidence.
-
-**Cross-repo copy-paste: 2.8% of files.** Only 32 byte-identical blocks appear in more than one repo, touching 7 of 250 files. People are writing these files themselves rather than copying templates.
-
-## Methodology, including what went wrong
-
-The first measurement claimed **12.9%** of commands were dead. That number was wrong twice over.
-
-**Error 1: prose parsed as commands.** The extractor matched `make sure` and `npm run ...` in ordinary sentences. Fixed with a stopword filter. 12.9% → 11.6%.
-
-**Error 2: Makefile includes not followed.** The first run reported that Google's [`config-sync`](https://github.com/GoogleContainerTools/config-sync) referenced three `make` targets that did not exist. All three exist in `Makefile.build`, which the root Makefile includes at line 330. Following includes one level: 11.6% → 8.9%.
-
-**Error 3: nested includes and git submodules.** Even one-level include-following was not enough.
-
-- [`openshift/ocm-agent`](https://github.com/openshift/ocm-agent): targets live **two levels deep**, in `boilerplate/openshift/osd-container-image/standard.mk`. Reported as missing. They exist.
-- [`exoscale/cli`](https://github.com/exoscale/cli): `go.mk` is a **git submodule**, so its contents 404 over raw HTTP. Reported as missing. They exist.
-
-Both were false accusations against real companies, caught before publication. The final measurement refuses to judge any Makefile it cannot fully resolve, which is why 11 files are skipped rather than counted. **8.9% → 3.6%.**
-
-**Error 4: fenced code blocks parsed as headings.** A `# comment` inside a ```` ``` ```` block was treated as a real ATX heading. This inflated the section counts (the "largest file" appeared to have 146 sections; it has 92) and leaked comment text verbatim into a digest that is supposed to never contain file bodies.
-
-**Error 5: prose matched as commands.** `make sense`, `make progress`, and `pytest suite` were all being counted as command references. Command extraction is now restricted to inline code spans and fenced blocks, with trailing `# comments` stripped.
-
-Final: **12.9% → 3.6%.** The headline number dropped by 72% under scrutiny. Every drop came from a bug that would have produced a false public claim about somebody's repository.
-
-## Reproducing
+## Reproducing the scan
 
 ```bash
-python3 skills/kontextrevision/scripts/scan.py <path>
+python3 skills/kontextrevision/scripts/scan.py <downloaded-corpus-root>
 ```
 
-Emits a JSON digest per file: role, byte size, token estimate, section headings with whitespace-stable content hashes, referenced commands, referenced paths. Never emits file bodies, so a 250-file corpus stays readable in one pass.
+The scanner emits file roles, byte sizes, token estimates, normalized full-file
+and section hashes, recognized commands, and referenced paths. It never emits
+file bodies.
