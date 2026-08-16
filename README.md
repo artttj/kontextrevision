@@ -6,37 +6,9 @@
 [![Tests](https://github.com/artttj/kontextrevision/actions/workflows/tests.yml/badge.svg)](https://github.com/artttj/kontextrevision/actions/workflows/tests.yml)
 [![Claude Code](https://img.shields.io/badge/claude%20code-plugin-8A63D2.svg)](https://claude.com/claude-code)
 
-> **Guarded reviser for agent instruction stacks.** Removes dead context, sharpens the rules that matter, and puts each instruction where it belongs.
+> **Guarded reviser for agent instruction stacks.** Removes dead context, sharpens rules, and puts instructions at the right scope.
 
-Kontextrevision is not a minifier. It reviews the architecture of agent context:
-
-- merges duplicated and overlapping rules
-- surfaces contradictions across scopes and tools
-- rewrites vague guidance into actionable constraints without inventing procedures
-- identifies instructions better delivered by on-demand skills
-- finds requirements better enforced by hooks or CI
-- preserves cross-tool coverage while routing rules to the correct scope
-- writes through git, keep-marker, growth, invention, and backup guards
-
-Persistent instruction files consume model context whenever their scope is active. The problem is not simply token count. Important rules compete with discoverable facts, instructions load at the wrong scope, guidance is duplicated across tools, and requirements get buried in prose.
-
-```console
-$ /kontextrevision:kontextrevision AGENTS.md
-
-  Merged   2 rules → 1        near-identical, lines 204 and 211
-  Rewrote  "Consider how a fix might affect existing features and
-            avoid any regression or breaking change."
-        →  "Do not introduce a regression or a breaking change to
-            existing features."
-  Removed  Version Types      236 tok   already in CONTRIBUTING.md
-  Kept     Required Checks              names real commands
-
-  AGENTS.md  1,969 → 1,676 tokens  (-14.9%)
-```
-
-Real `--dry-run` output from [PaloAltoNetworks/docusaurus-openapi-docs](https://github.com/PaloAltoNetworks/docusaurus-openapi-docs). An agent cannot pass or fail "consider how". It can pass or fail "do not introduce". Same requirement, now checkable, and nothing was invented to get there.
-
-The name combines the German *Kontext* and *Revision*: a revision pass over the context.
+Reviews `AGENTS.md`, `CLAUDE.md`, `SOUL.md`, and the surrounding agent context. It removes redundancy, finds conflicts, improves vague rules, and writes changes back behind safety guards.
 
 ## Quick install
 
@@ -64,7 +36,35 @@ mkdir -p ~/.config/opencode/skills
 ln -s ~/.local/share/kontextrevision/skills/kontextrevision ~/.config/opencode/skills/kontextrevision
 ```
 
-See [Install](#install) for native invocation forms.
+## What it looks like
+
+```text
+$ /kontextrevision:kontextrevision AGENTS.md
+
+Merged   2 rules → 1
+Rewrote  vague guidance into an actionable constraint
+Removed  Version Types      236 tok
+Kept     Required Checks
+
+AGENTS.md  1,969 → 1,676 tokens  (-14.9%)
+```
+
+Real `--dry-run` result from [PaloAltoNetworks/docusaurus-openapi-docs](https://github.com/PaloAltoNetworks/docusaurus-openapi-docs).
+
+**Token reduction is a consequence. Better context architecture is the goal.**
+
+## What it does
+
+| Operation | When |
+|---|---|
+| **Structure** | Hierarchy, scope, loading, coverage, contradictions, or important rules are hard to follow |
+| **Remove** | Generic advice, repo facts the agent can discover, duplicated documentation |
+| **Rewrite** | The intent matters but the wording is not actionable |
+| **Merge** | Several rules express the same requirement |
+| **Route** | The rule belongs at a narrower or broader scope without losing harness coverage |
+| **Recommend delivery** | A rule belongs in an on-demand skill, deterministic hook, or CI check |
+
+This release identifies better delivery targets but does not create skills, hooks, settings, or CI workflows. Those changes need harness-specific validation and explicit user control.
 
 ## Case studies
 
@@ -81,53 +81,27 @@ These are context-revision results, not claims about task-completion quality or 
 
 For contrast, [microsoft/vscode](https://github.com/microsoft/vscode) ⭐ 189k ships a **67-token** `AGENTS.md` with nothing to cut. A mirrored `AGENTS.md` and `CLAUDE.md` pair is detected as cross-tool compatibility, not waste, and counted once within its load tier.
 
-## Install
-
-### Claude Code
-
-```bash
-/plugin marketplace add artttj/kontextrevision
-/plugin install kontextrevision@kontextrevision
-```
-
-Invoke it with `/kontextrevision:kontextrevision`.
-
-### Codex
-
-```bash
-codex plugin marketplace add artttj/kontextrevision
-codex plugin add kontextrevision@kontextrevision
-```
-
-Invoke it with `$kontextrevision`.
-
-### OpenCode
-
-```bash
-git clone https://github.com/artttj/kontextrevision ~/.local/share/kontextrevision
-mkdir -p ~/.config/opencode/skills
-ln -s ~/.local/share/kontextrevision/skills/kontextrevision ~/.config/opencode/skills/kontextrevision
-```
-
-Invoke it with `/kontextrevision`.
-
 ## Usage
 
 Claude Code:
 
-```bash
+```text
 /kontextrevision:kontextrevision --dry-run
-/kontextrevision:kontextrevision AGENTS.md
 ```
 
-Codex and OpenCode use their native invocation forms:
+Codex:
 
 ```text
 $kontextrevision --dry-run
+```
+
+OpenCode:
+
+```text
 /kontextrevision --dry-run
 ```
 
-Start with `--dry-run`. By default it finds instruction files plus every installed skill, agent and command. No file list, no flags.
+Start with `--dry-run`. With no file argument, Kontextrevision discovers the instruction stack automatically.
 
 The scanner also runs standalone with no install:
 
@@ -137,21 +111,6 @@ python3 skills/kontextrevision/scripts/scan.py ~/.claude
 ```
 
 It reports the cross-tool instruction inventory as `effective_now_tokens` and descendant `conditionally_loaded_tokens`, then breaks both down per tool under `harness_tokens`. `skill_description_tokens` and `on_demand_body_tokens` keep trigger cost separate from invoked bodies. The scope graph shows which harness receives each file, where that file applies, and what activates it.
-
-## What it does
-
-| Operation | When |
-|---|---|
-| **Structure** | Hierarchy, scope, loading, coverage, contradictions, or important rules are hard to follow |
-| **Remove** | Generic advice, repo facts the agent can discover, duplicated documentation |
-| **Rewrite** | The intent matters but the wording is not actionable |
-| **Merge** | Several rules express the same requirement |
-| **Route** | The rule belongs at a narrower or broader scope without losing harness coverage |
-| **Recommend delivery** | A rule belongs in an on-demand skill, deterministic hook, or CI check |
-
-**Token reduction is a consequence. Better context architecture is the goal.**
-
-This release identifies better delivery targets but does not create skills, hooks, settings, or CI workflows. Those changes need harness-specific validation and explicit user control.
 
 ## Safety
 
@@ -193,3 +152,5 @@ This one reviews the instruction system around the agent, then continues through
 Anthropic's [best-practices guide](https://code.claude.com/docs/en/best-practices) names one failure mode directly: *"Bloated CLAUDE.md files cause Claude to ignore your actual instructions."*
 
 The evidence is mixed: repository instructions can change cost, exploration, and task success, but shorter files are not inherently better. The claim here stays narrow: preserve specific operational knowledge, remove context that does no work, and make what remains easier to follow. The direct studies and adjacent long-context research are summarized in [the research reference](skills/kontextrevision/references/research.md).
+
+The name combines the German *Kontext* and *Revision*: a revision pass over the context.
