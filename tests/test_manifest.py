@@ -26,6 +26,20 @@ def test_codex_plugin_uses_shared_skill_tree():
     assert os.path.exists(os.path.join(ROOT, data["skills"], "kontextrevision", "SKILL.md"))
 
 
+def test_codex_marketplace_points_to_repository_plugin():
+    path = os.path.join(ROOT, ".agents", "plugins", "marketplace.json")
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    assert data["name"] == "kontextrevision"
+    assert data["interface"]["displayName"] == "Kontextrevision"
+    assert data["plugins"] == [{
+        "name": "kontextrevision",
+        "source": {"source": "local", "path": "./"},
+        "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+        "category": "Developer Tools",
+    }]
+
+
 def test_marketplace_manifest_lists_the_plugin():
     with open(os.path.join(ROOT, ".claude-plugin", "marketplace.json"), encoding="utf-8") as fh:
         data = json.load(fh)
@@ -79,6 +93,9 @@ def test_readme_documents_supported_tool_installation():
         text = fh.read()
     assert "actions/workflows/tests.yml/badge.svg" in text
     assert "### Claude Code" in text
+    assert "/plugin marketplace add artttj/kontextrevision" in text
+    assert "/plugin install kontextrevision@kontextrevision" in text
+    assert "/kontextrevision:kontextrevision" in text
     assert "### Codex" in text
     assert "codex plugin marketplace add artttj/kontextrevision" in text
     assert "### OpenCode" in text

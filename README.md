@@ -36,9 +36,10 @@ Real `--dry-run` output from [PaloAltoNetworks/docusaurus-openapi-docs](https://
 
 ```bash
 /plugin marketplace add artttj/kontextrevision
+/plugin install kontextrevision@kontextrevision
 ```
 
-Invoke it with `/kontextrevision`.
+Invoke it with `/kontextrevision:kontextrevision`.
 
 ### Codex
 
