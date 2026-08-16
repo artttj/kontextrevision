@@ -1,0 +1,36 @@
+{
+  "name": "kontextrevision",
+  "version": "1.0.0",
+  "description": "Revises agent instruction files in place: bloat removed, duplicates merged, misplaced rules routed, cross-layer conflicts reported.",
+  "author": {
+    "name": "Artem Iagovdik",
+    "url": "https://github.com/artttj"
+  },
+  "homepage": "https://github.com/artttj/kontextrevision#readme",
+  "repository": "https://github.com/artttj/kontextrevision",
+  "license": "MIT",
+  "keywords": [
+    "agents-md",
+    "claude-md",
+    "context-engineering",
+    "instruction-files"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Kontextrevision",
+    "shortDescription": "Tighten agent instruction files safely",
+    "longDescription": "Remove ineffective context, merge duplicate rules, route misplaced guidance, and surface conflicts without inventing new instructions.",
+    "developerName": "Artem Iagovdik",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/artttj/kontextrevision",
+    "defaultPrompt": [
+      "Revise this repository's agent instructions.",
+      "Show what can be removed from AGENTS.md."
+    ]
+  }
+}

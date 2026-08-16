@@ -3,10 +3,12 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "skills", "kontextrevision", "scripts"))
 
-import scan  # noqa: E402
-from conftest import write  # noqa: E402
+import scan
+from conftest import write
 
 
 def test_classify_role_by_basename():
@@ -74,6 +76,21 @@ def test_extract_commands_finds_runners():
     assert "npm run build" in cmds
     assert "make lint" in cmds
     assert "composer install" in cmds
+
+
+@pytest.mark.parametrize("command", [
+    "pytest tests/",
+    "cargo test",
+    "git push --force",
+    "python manage.py migrate",
+    "docker compose down",
+])
+def test_extract_commands_recognizes_common_commands(command):
+    assert scan.extract_commands("Run `{0}`.".format(command)) == [command]
+
+
+def test_extract_commands_reads_fenced_commands():
+    assert scan.extract_commands("```bash\nmake deploy\n```") == ["make deploy"]
 
 
 def test_extract_commands_deduplicates():
@@ -226,6 +243,15 @@ def test_discover_harness_keeps_only_newest_cached_plugin_version(tmp_path):
     assert "1.2.0" in found[0]
 
 
+def test_old_definition_removed_in_new_version_is_not_counted(tmp_path):
+    old = write(tmp_path, "plugins/cache/market/thing/1.0.0/skills/old/SKILL.md",
+                "---\nname: old\ndescription: old\n---\n")
+    new = write(tmp_path, "plugins/cache/market/thing/2.0.0/skills/new/SKILL.md",
+                "---\nname: new\ndescription: new\n---\n")
+    assert scan.discover_harness(str(tmp_path)) == [new]
+    assert old not in scan.discover_harness(str(tmp_path))
+
+
 def test_discover_harness_keeps_all_versions_of_different_plugins(tmp_path):
     write(tmp_path, "plugins/cache/mkt/alpha/1.0.0/skills/a/SKILL.md", "---\nname: a\ndescription: d\n---\n")
     write(tmp_path, "plugins/cache/mkt/beta/1.0.0/skills/b/SKILL.md", "---\nname: b\ndescription: d\n---\n")
@@ -299,6 +325,30 @@ def test_mirrored_agents_and_claude_counted_once(tmp_path):
     single = scan.estimate_tokens(body)
     assert d["instruction_tokens"] == single
     assert d["mirrors"] == [["AGENTS.md", "CLAUDE.md"]]
+
+
+def test_same_body_under_different_headings_is_not_a_mirror(tmp_path):
+    body = "same body\n" * 40
+    write(tmp_path, "AGENTS.md", "# Python\n" + body)
+    write(tmp_path, "CLAUDE.md", "# Rust\n" + body)
+    assert scan.build_digest(str(tmp_path))["mirrors"] == []
+
+
+def test_mirror_hash_ignores_whitespace_differences(tmp_path):
+    write(tmp_path, "AGENTS.md", "# Guide\nsame   body\n" * 20)
+    write(tmp_path, "CLAUDE.md", "# Guide\n\n  same body  \n\n" * 20)
+    assert scan.build_digest(str(tmp_path))["mirrors"] == [["AGENTS.md", "CLAUDE.md"]]
+
+
+def test_mirror_paths_are_relative_to_scan_root(tmp_path):
+    for directory in ["api", "web"]:
+        body = "# Guide\n" + "rule line\n" * 40
+        write(tmp_path, "{0}/AGENTS.md".format(directory), body)
+        write(tmp_path, "{0}/CLAUDE.md".format(directory), body)
+    assert scan.build_digest(str(tmp_path))["mirrors"] == [
+        ["api/AGENTS.md", "api/CLAUDE.md"],
+        ["web/AGENTS.md", "web/CLAUDE.md"],
+    ]
 
 
 def test_different_agents_and_claude_counted_separately(tmp_path):

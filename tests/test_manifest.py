@@ -13,6 +13,19 @@ def test_plugin_manifest_is_valid_json_with_required_keys():
     assert data["description"]
 
 
+def test_plugin_versions_match_release():
+    for directory in [".claude-plugin", ".codex-plugin"]:
+        with open(os.path.join(ROOT, directory, "plugin.json"), encoding="utf-8") as fh:
+            assert json.load(fh)["version"] == "1.0.0"
+
+
+def test_codex_plugin_uses_shared_skill_tree():
+    with open(os.path.join(ROOT, ".codex-plugin", "plugin.json"), encoding="utf-8") as fh:
+        data = json.load(fh)
+    assert data["skills"] == "./skills/"
+    assert os.path.exists(os.path.join(ROOT, data["skills"], "kontextrevision", "SKILL.md"))
+
+
 def test_marketplace_manifest_lists_the_plugin():
     with open(os.path.join(ROOT, ".claude-plugin", "marketplace.json"), encoding="utf-8") as fh:
         data = json.load(fh)
@@ -48,7 +61,26 @@ def test_keep_marker_in_skill_matches_the_writer():
     import apply
     with open(os.path.join(SKILL_DIR, "SKILL.md"), encoding="utf-8") as fh:
         text = fh.read()
-    # The marker documented in SKILL.md must be the one apply.py actually honors.
     sample = "<!-- kontextrevision:keep -->\nX\n<!-- /kontextrevision:keep -->"
     assert "kontextrevision:keep" in text
     assert apply.extract_keep_blocks(sample) == ["X"]
+
+
+def test_ci_runs_documented_python_39_suite():
+    workflow = os.path.join(ROOT, ".github", "workflows", "tests.yml")
+    with open(workflow, encoding="utf-8") as fh:
+        text = fh.read()
+    assert 'python-version: "3.9"' in text
+    assert "python3 -m pytest tests/ -q" in text
+
+
+def test_readme_documents_supported_tool_installation():
+    with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
+        text = fh.read()
+    assert "actions/workflows/tests.yml/badge.svg" in text
+    assert "### Claude Code" in text
+    assert "### Codex" in text
+    assert "codex plugin marketplace add artttj/kontextrevision" in text
+    assert "### OpenCode" in text
+    assert "~/.config/opencode/skills/kontextrevision" in text
+    assert "/kontextrevision" in text

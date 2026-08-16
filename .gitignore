@@ -1,4 +1,5 @@
 docs/superpowers/
+.worktrees/
 *.bak
 *.bak.*
 __pycache__/

@@ -1,12 +1,15 @@
 import json
 import os
+import stat
 import subprocess
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "skills", "kontextrevision", "scripts"))
 
-import apply  # noqa: E402
-from conftest import write  # noqa: E402
+import apply
+from conftest import write
 
 
 def git_init(tmp_path):
@@ -34,6 +37,13 @@ def test_write_atomic_leaves_no_temp_files(tmp_path):
     target = write(tmp_path, "AGENTS.md", "original\n")
     apply.write_atomic(target, "replaced\n")
     assert [n for n in os.listdir(str(tmp_path)) if ".tmp." in n] == []
+
+
+def test_write_atomic_preserves_file_mode(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "private\n")
+    os.chmod(target, 0o600)
+    apply.write_atomic(target, "rewritten\n")
+    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
 
 
 def test_extract_keep_blocks_returns_protected_content():
@@ -192,6 +202,33 @@ def test_apply_refuses_unpaired_keep_marker(tmp_path):
         assert "DO NOT LOSE THIS" in fh.read()
 
 
+def test_apply_refuses_proposed_unmatched_open_marker(tmp_path):
+    original = "# Rules\n" + "Keep this instruction clear and stable.\n" * 20
+    rewritten = ("# Rules\n<!-- kontextrevision:keep -->\n" +
+                 "Keep this instruction clear.\n" * 20)
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "refused"
+    assert "proposed" in res["reason"]
+
+
+def test_apply_refuses_proposed_unmatched_close_marker(tmp_path):
+    original = "# Rules\n" + "Keep this instruction clear and stable.\n" * 20
+    rewritten = ("# Rules\n<!-- /kontextrevision:keep -->\n" +
+                 "Keep this instruction clear.\n" * 20)
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "refused"
+    assert "proposed" in res["reason"]
+
+
+def test_apply_allows_proposed_paired_keep_markers(tmp_path):
+    original = "# Rules\n" + "Keep this instruction clear and stable.\n" * 20
+    rewritten = ("# Rules\n<!-- kontextrevision:keep -->\nPreserve this.\n"
+                 "<!-- /kontextrevision:keep -->\n" +
+                 "Keep this instruction clear.\n" * 18)
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "written"
+
+
 def test_apply_refuses_symlink(tmp_path):
     real = write(tmp_path, "real/AGENTS.md", "real content here\n")
     link = os.path.join(str(tmp_path), "AGENTS.md")
@@ -295,6 +332,29 @@ def test_apply_refuses_rewrite_that_invents_a_command(tmp_path):
     assert "invent" in res["reason"]
 
 
+@pytest.mark.parametrize("command", [
+    "pytest tests/",
+    "cargo test",
+    "git push --force",
+    "python manage.py migrate",
+    "docker compose down",
+])
+def test_apply_refuses_common_invented_commands(tmp_path, command):
+    original = "# Rules\n" + "Be careful with deployment and repository operations.\n" * 12
+    rewritten = "# Rules\n" + "Run `{0}` before release.\n".format(command) * 12
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "refused"
+    assert "invent" in res["reason"]
+
+
+def test_apply_refuses_invented_command_in_fence(tmp_path):
+    original = "# Rules\n" + "Follow the release policy carefully.\n" * 12
+    rewritten = "# Rules\n```bash\nmake deploy\n```\n" + "Follow the policy.\n" * 12
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "refused"
+    assert "invent" in res["reason"]
+
+
 def test_apply_allows_invented_command_when_opted_in(tmp_path):
     target = write(tmp_path, "AGENTS.md", "# Rules\n" + "Be careful with the whole database here.\n" * 12)
     invented = "# Rules\n" + "Never migrate without `make db-dry`.\n" * 12
@@ -305,6 +365,20 @@ def test_apply_allows_rewrite_reusing_an_existing_command(tmp_path):
     target = write(tmp_path, "AGENTS.md", "# Rules\n" + "Run `make lint` sometimes, maybe, ok.\n" * 12)
     tightened = "# Rules\n" + "Run `make lint` before each commit.\n" * 12
     assert apply.apply_file(target, tightened)["status"] == "written"
+
+
+@pytest.mark.parametrize("command", [
+    "pytest tests/",
+    "cargo test",
+    "git push --force",
+    "python manage.py migrate",
+    "docker compose down",
+])
+def test_apply_allows_reusing_common_command(tmp_path, command):
+    original = "# Rules\n" + "Sometimes run `{0}` before release.\n".format(command) * 12
+    rewritten = "# Rules\n" + "Run `{0}` before release.\n".format(command) * 12
+    target = write(tmp_path, "AGENTS.md", original)
+    assert apply.apply_file(target, rewritten)["status"] == "written"
 
 
 def test_rollback_restores_from_backup_despite_dirty_guard(tmp_path):
@@ -323,3 +397,15 @@ def test_rollback_restores_from_backup_despite_dirty_guard(tmp_path):
 def test_rollback_without_a_backup_reports_cleanly(tmp_path):
     target = write(tmp_path, "AGENTS.md", "untouched\n")
     assert apply.rollback(target)["status"] == "refused"
+
+
+def test_rollback_finds_backup_suffix_above_99(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "current\n")
+    write(tmp_path, "AGENTS.md.bak", "base\n")
+    write(tmp_path, "AGENTS.md.bak.99", "ninety nine\n")
+    newest = write(tmp_path, "AGENTS.md.bak.100", "one hundred\n")
+    write(tmp_path, "AGENTS.md.bak.latest", "invalid\n")
+    assert apply.rollback(target)["status"] == "rolled_back"
+    with open(target, encoding="utf-8") as fh:
+        assert fh.read() == "one hundred\n"
+    assert not os.path.exists(newest)

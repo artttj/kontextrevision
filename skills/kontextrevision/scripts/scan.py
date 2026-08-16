@@ -27,9 +27,10 @@ CODE_SPAN_RE = re.compile(r"`([^`\n]{1,120})`")
 
 COMMAND_RE = re.compile(
     r"^((?:npm|yarn|pnpm)\s+(?:run\s+)?[\w:.-]+"
-    r"|make\s+[\w:.-]+"
-    r"|composer\s+[\w:.-]+"
-    r"|pytest(?:\s+[\w:./-]+)?)$"
+    r"(?:\s+[-\w@:./=]+)*"
+    r"|(?:make|composer|pytest|cargo|git|python|python3)\s+[-\w@:./=]+"
+    r"(?:\s+[-\w@:./=]+)*"
+    r"|docker\s+(?:compose\s+)?[-\w@:./=]+(?:\s+[-\w@:./=]+)*)$"
 )
 
 PATH_RE = re.compile(
@@ -131,8 +132,6 @@ def estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
-# Prose words that follow a runner verb often enough to produce false matches.
-# "make sure the tests pass" is English; "make lint" is a command.
 TARGET_STOPWORDS = {
     "commands", "command", "sure", "it", "the", "a", "an", "this", "that",
     "use", "your", "any", "all", "them", "these", "those", "some", "more",
@@ -258,6 +257,7 @@ def discover_harness(root: str) -> List[str]:
     what is actually loaded.
     """
     out = []
+    cached = []
     newest = {}
     if os.path.isfile(root):
         return [] if os.path.islink(root) or classify_definition(root) == "unknown" \
@@ -273,11 +273,11 @@ def discover_harness(root: str) -> List[str]:
             if slot is None:
                 out.append(full)
                 continue
-            plugin, version, rest = slot
-            key = (plugin, rest)
-            if key not in newest or _version_key(version) > _version_key(newest[key][0]):
-                newest[key] = (version, full)
-    out.extend(v[1] for v in newest.values())
+            plugin, version, _ = slot
+            cached.append((plugin, version, full))
+            if plugin not in newest or _version_key(version) > _version_key(newest[plugin]):
+                newest[plugin] = version
+    out.extend(full for plugin, version, full in cached if version == newest[plugin])
     return sorted(out)
 
 
@@ -346,13 +346,14 @@ def digest_file(path: str) -> Dict:
         "role": classify_role(path),
         "bytes": len(text.encode("utf-8")),
         "est_tokens": estimate_tokens(text),
+        "hash": hashlib.sha256(normalize_body(text).encode("utf-8")).hexdigest()[:12],
         "sections": parse_sections(text),
         "commands": extract_commands(text),
         "paths": extract_paths(text),
     }
 
 
-def _find_mirrors(files: List[Dict]):
+def _find_mirrors(files: List[Dict], root: str):
     """Pair AGENTS.md with an identical CLAUDE.md in the same directory.
 
     Keeping both is deliberate cross-tool compatibility: Codex reads one name and
@@ -367,9 +368,11 @@ def _find_mirrors(files: List[Dict]):
         a, c = roles.get("agents"), roles.get("claude")
         if not a or not c:
             continue
-        a_hashes = [s["hash"] for s in a["sections"]]
-        if a_hashes and a_hashes == [s["hash"] for s in c["sections"]]:
-            mirrors.append(["AGENTS.md", "CLAUDE.md"])
+        if a["bytes"] and a["hash"] == c["hash"]:
+            mirrors.append([
+                os.path.relpath(a["path"], root).replace(os.sep, "/"),
+                os.path.relpath(c["path"], root).replace(os.sep, "/"),
+            ])
             saved += min(a["est_tokens"], c["est_tokens"])
     return mirrors, saved
 
@@ -388,7 +391,7 @@ def build_digest(root: str) -> Dict:
         except (IOError, OSError):
             continue
     harness = build_harness_digest(root)
-    mirrors, mirrored_away = _find_mirrors(files)
+    mirrors, mirrored_away = _find_mirrors(files, root)
     instruction_tokens = sum(f["est_tokens"] for f in files) - mirrored_away
     return {
         "root": root,

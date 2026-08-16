@@ -2,10 +2,12 @@
 """The only writer. Enforces every safety guard before touching disk."""
 
 import argparse
+import glob
 import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from typing import Dict, List, Optional
@@ -87,17 +89,60 @@ def missing_keep_blocks(original: str, new: str) -> List[str]:
     return missing
 
 
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
 CODE_SPAN_RE = re.compile(r"`([^`\n]{1,120})`")
-RUNNER_RE = re.compile(r"^(?:(?:npm|yarn|pnpm)\s+(?:run\s+)?|make\s+|composer\s+)[\w:.-]+$")
+COMMAND_RE = re.compile(
+    r"^((?:npm|yarn|pnpm)\s+(?:run\s+)?[\w:.-]+"
+    r"(?:\s+[-\w@:./=]+)*"
+    r"|(?:make|composer|pytest|cargo|git|python|python3)\s+[-\w@:./=]+"
+    r"(?:\s+[-\w@:./=]+)*"
+    r"|docker\s+(?:compose\s+)?[-\w@:./=]+(?:\s+[-\w@:./=]+)*)$"
+)
+
+TARGET_STOPWORDS = {
+    "commands", "command", "sure", "it", "the", "a", "an", "this", "that",
+    "use", "your", "any", "all", "them", "these", "those", "some", "more",
+    "note", "changes",
+}
+
+
+def _is_real_target(target: str) -> bool:
+    """Reject prose and placeholders that look like command targets."""
+    if not target or target.lower() in TARGET_STOPWORDS:
+        return False
+    if set(target) <= set(".-_:"):
+        return False
+    return True
+
+
+def code_spans(text: str) -> List[str]:
+    """Inline code spans plus fenced-block lines."""
+    spans = [m.group(1).strip() for m in CODE_SPAN_RE.finditer(text)]
+    in_fence = False
+    for line in text.split("\n"):
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence and line.strip():
+            spans.append(re.sub(r"\s+#.*$", "", line).strip())
+    return spans
 
 
 def command_refs(text: str) -> List[str]:
-    """Runner commands named in inline code spans."""
+    """Recognized commands named in inline code spans or fenced blocks."""
     out = []
-    for m in CODE_SPAN_RE.finditer(text):
-        span = re.sub(r"\s+", " ", m.group(1)).strip()
-        if RUNNER_RE.match(span) and span not in out:
-            out.append(span)
+    for raw in code_spans(text):
+        span = re.sub(r"\s+", " ", raw).strip()
+        match = COMMAND_RE.match(span)
+        if not match:
+            continue
+        command = match.group(1).strip()
+        parts = command.split()
+        if len(parts) < 2 or (parts[1] == "run" and len(parts) < 3):
+            continue
+        target = parts[2] if parts[1] == "run" else parts[1]
+        if _is_real_target(target) and command not in out:
+            out.append(command)
     return out
 
 
@@ -161,11 +206,13 @@ def backup_path(path: str) -> str:
 
 def write_atomic(path: str, content: str) -> str:
     """Back up the original, then replace it atomically. Returns backup path."""
+    mode = stat.S_IMODE(os.stat(path).st_mode)
     backup = backup_path(path)
     shutil.copy2(path, backup)
     tmp = "{0}.tmp.{1}".format(path, os.getpid())
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(content)
+    os.chmod(tmp, mode)
     os.replace(tmp, path)
     return backup
 
@@ -183,7 +230,6 @@ def _result(status, reason, before, after, backup=None):
 
 
 def rollback(path):
-    # type: (str) -> Dict
     """Restore the most recent backup, then delete it.
 
     A move across two files leaves the source rewritten if the destination write
@@ -191,12 +237,18 @@ def rollback(path):
     now git-dirty and would hit that guard. Restoring the known-good backup is
     safe by construction, so it bypasses the guards deliberately.
     """
-    candidates = [path + ".bak"] + [
-        "{0}.bak.{1}".format(path, n) for n in range(1, 100)]
-    existing = [c for c in candidates if os.path.exists(c)]
+    base = path + ".bak"
+    existing = []
+    for candidate in glob.glob(base + "*"):
+        if candidate == base:
+            existing.append((0, candidate))
+            continue
+        match = re.match(r"^{0}\.(\d+)$".format(re.escape(base)), candidate)
+        if match:
+            existing.append((int(match.group(1)), candidate))
     if not existing:
         return _result("refused", "no backup found for {0}".format(path), 0, 0)
-    backup = existing[-1]
+    backup = max(existing, key=lambda item: item[0])[1]
     with open(backup, "r", encoding="utf-8") as fh:
         content = fh.read()
     tmp = "{0}.tmp.{1}".format(path, os.getpid())
@@ -209,7 +261,6 @@ def rollback(path):
 
 def apply_file(path, new_content, force=False, allow_growth=False, dry_run=False,
                allow_new_commands=False):
-    # type: (str, str, bool, bool, bool, bool) -> Dict
     """Run every guard, then write. Returns a JSON-serializable result."""
     if os.path.islink(path):
         return _result("refused",
@@ -246,6 +297,13 @@ def apply_file(path, new_content, force=False, allow_growth=False, dry_run=False
         return _result("refused",
                        "{0} keep marker(s) have no closing tag; fix the markers "
                        "before revising".format(unpaired),
+                       before, after)
+
+    proposed_unpaired = unpaired_keep_markers(new_content)
+    if proposed_unpaired > 0:
+        return _result("refused",
+                       "{0} keep marker(s) in the proposed rewrite are unpaired; "
+                       "fix the markers before revising".format(proposed_unpaired),
                        before, after)
 
     dropped = missing_keep_blocks(original, new_content)
@@ -294,7 +352,6 @@ def apply_file(path, new_content, force=False, allow_growth=False, dry_run=False
 
 
 def main(argv):
-    # type: (List[str]) -> int
     parser = argparse.ArgumentParser(
         description="Apply revised content to an instruction file. Reads new content from stdin.")
     parser.add_argument("path", help="File to rewrite")
