@@ -351,7 +351,7 @@ def build_harness_digest(root: str) -> Dict:
 
 def digest_file(path: str) -> Dict:
     """Build the digest entry for one file. Never returns the file body."""
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+    with open(path, "r", encoding="utf-8", errors="replace", newline="") as fh:
         text = fh.read()
     return {
         "path": path,

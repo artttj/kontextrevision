@@ -71,6 +71,21 @@ def test_parse_sections_hashes_include_heading_and_level():
     assert heading_a["normalized_hash"] != level_b["normalized_hash"]
 
 
+def test_digest_file_exact_hash_preserves_line_endings(tmp_path):
+    lf = os.path.join(str(tmp_path), "lf", "AGENTS.md")
+    crlf = os.path.join(str(tmp_path), "crlf", "AGENTS.md")
+    os.makedirs(os.path.dirname(lf))
+    os.makedirs(os.path.dirname(crlf))
+    with open(lf, "wb") as fh:
+        fh.write(b"# Rules\nbody\n")
+    with open(crlf, "wb") as fh:
+        fh.write(b"# Rules\r\nbody\r\n")
+    lf_section = scan.digest_file(lf)["sections"][0]
+    crlf_section = scan.digest_file(crlf)["sections"][0]
+    assert lf_section["exact_hash"] != crlf_section["exact_hash"]
+    assert lf_section["normalized_hash"] == crlf_section["normalized_hash"]
+
+
 def test_parse_sections_no_preamble_when_file_starts_with_heading():
     secs = scan.parse_sections("# Only\nbody\n")
     assert len(secs) == 1
