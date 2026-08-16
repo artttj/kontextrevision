@@ -226,6 +226,15 @@ def test_discover_harness_keeps_only_newest_cached_plugin_version(tmp_path):
     assert "1.2.0" in found[0]
 
 
+def test_old_definition_removed_in_new_version_is_not_counted(tmp_path):
+    old = write(tmp_path, "plugins/cache/market/thing/1.0.0/skills/old/SKILL.md",
+                "---\nname: old\ndescription: old\n---\n")
+    new = write(tmp_path, "plugins/cache/market/thing/2.0.0/skills/new/SKILL.md",
+                "---\nname: new\ndescription: new\n---\n")
+    assert scan.discover_harness(str(tmp_path)) == [new]
+    assert old not in scan.discover_harness(str(tmp_path))
+
+
 def test_discover_harness_keeps_all_versions_of_different_plugins(tmp_path):
     write(tmp_path, "plugins/cache/mkt/alpha/1.0.0/skills/a/SKILL.md", "---\nname: a\ndescription: d\n---\n")
     write(tmp_path, "plugins/cache/mkt/beta/1.0.0/skills/b/SKILL.md", "---\nname: b\ndescription: d\n---\n")

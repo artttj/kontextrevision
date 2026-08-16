@@ -258,6 +258,7 @@ def discover_harness(root: str) -> List[str]:
     what is actually loaded.
     """
     out = []
+    cached = []
     newest = {}
     if os.path.isfile(root):
         return [] if os.path.islink(root) or classify_definition(root) == "unknown" \
@@ -273,11 +274,11 @@ def discover_harness(root: str) -> List[str]:
             if slot is None:
                 out.append(full)
                 continue
-            plugin, version, rest = slot
-            key = (plugin, rest)
-            if key not in newest or _version_key(version) > _version_key(newest[key][0]):
-                newest[key] = (version, full)
-    out.extend(v[1] for v in newest.values())
+            plugin, version, _ = slot
+            cached.append((plugin, version, full))
+            if plugin not in newest or _version_key(version) > _version_key(newest[plugin]):
+                newest[plugin] = version
+    out.extend(full for plugin, version, full in cached if version == newest[plugin])
     return sorted(out)
 
 
