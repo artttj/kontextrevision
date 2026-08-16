@@ -95,7 +95,7 @@ python3 skills/kontextrevision/scripts/scan.py .
 python3 skills/kontextrevision/scripts/scan.py ~/.claude
 ```
 
-It reports `effective_now_tokens`, descendant `conditionally_loaded_tokens`, `skill_description_tokens`, and `on_demand_body_tokens`. The scope graph shows which harness receives each file, where that file applies, and what activates it.
+It reports the cross-tool instruction inventory as `effective_now_tokens` and descendant `conditionally_loaded_tokens`, then breaks both down per tool under `harness_tokens`. `skill_description_tokens` and `on_demand_body_tokens` keep trigger cost separate from invoked bodies. The scope graph shows which harness receives each file, where that file applies, and what activates it.
 
 ## What it does
 

@@ -474,6 +474,30 @@ def test_instruction_roles_report_harness_coverage(tmp_path):
     }
 
 
+def test_digest_reports_tokens_per_harness(tmp_path):
+    agents = "# Agents\n" + "agent rule\n" * 20
+    claude = "# Claude\n" + "claude rule\n" * 30
+    child = "# Child\n" + "child rule\n" * 10
+    write(tmp_path, "AGENTS.md", agents)
+    write(tmp_path, "CLAUDE.md", claude)
+    write(tmp_path, "sub/AGENTS.md", child)
+    d = scan.build_digest(str(tmp_path))
+    assert d["harness_tokens"] == {
+        "claude-code": {
+            "effective_now_tokens": scan.estimate_tokens(claude),
+            "conditionally_loaded_tokens": 0,
+        },
+        "codex": {
+            "effective_now_tokens": scan.estimate_tokens(agents),
+            "conditionally_loaded_tokens": scan.estimate_tokens(child),
+        },
+        "opencode": {
+            "effective_now_tokens": scan.estimate_tokens(agents),
+            "conditionally_loaded_tokens": scan.estimate_tokens(child),
+        },
+    }
+
+
 def test_mirror_tokens_are_counted_once_in_scope_tiers(tmp_path):
     body = "# Shared\n" + "same rule\n" * 20
     write(tmp_path, "AGENTS.md", body)

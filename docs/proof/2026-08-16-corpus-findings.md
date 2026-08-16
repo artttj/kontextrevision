@@ -68,7 +68,7 @@ invisible-Unicode cleanup feature on this evidence.
 python3 skills/kontextrevision/scripts/scan.py <downloaded-corpus-root>
 ```
 
-The scanner emits file roles, scopes, harness coverage, load conditions, byte
-sizes, token estimates, normalized full-file hashes, exact and normalized
-section hashes, recognized commands, and referenced paths. It never emits file
-bodies.
+The scanner emits file roles, scopes, harness coverage, per-harness token tiers,
+load conditions, byte sizes, token estimates, normalized full-file hashes, exact
+and normalized section hashes, recognized commands, and referenced paths. It
+never emits file bodies.

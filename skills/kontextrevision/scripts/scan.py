@@ -5,8 +5,8 @@ Never returns file bodies. A tree can hold dozens of instruction files, and
 loading them all into an agent's context defeats the purpose of tidying them.
 """
 
-import hashlib
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -436,6 +436,22 @@ def _scope_graph(files: List[Dict], root: str) -> List[Dict]:
     return graph
 
 
+def _harness_tokens(files: List[Dict]) -> Dict:
+    """Return current and conditional instruction tokens for each harness."""
+    harnesses = sorted({harness for item in files for harness in item["harnesses"]})
+    totals = {}
+    for harness in harnesses:
+        totals[harness] = {
+            "effective_now_tokens": sum(
+                item["est_tokens"] for item in files
+                if harness in item["harnesses"] and item["load_condition"] == "effective_now"),
+            "conditionally_loaded_tokens": sum(
+                item["est_tokens"] for item in files
+                if harness in item["harnesses"] and item["load_condition"] == "conditional"),
+        }
+    return totals
+
+
 def _find_mirrors(files: List[Dict], root: str):
     """Pair AGENTS.md with an identical CLAUDE.md in the same directory.
 
@@ -494,6 +510,7 @@ def build_digest(root: str, cwd: Optional[str] = None) -> Dict:
         "cwd": selected_cwd,
         "files": files,
         "scope_graph": _scope_graph(files, scope_root),
+        "harness_tokens": _harness_tokens(files),
         "definitions": harness["definitions"],
         "instruction_tokens": instruction_tokens,
         "description_tokens": harness["always_on_tokens"],

@@ -30,6 +30,7 @@ Read the load tiers separately:
 
 - `effective_now_tokens`: instruction files active for the selected working directory
 - `conditionally_loaded_tokens`: descendant instructions activated only in their scope
+- `harness_tokens`: the same instruction tiers separated by receiving harness
 - `skill_description_tokens`: definition triggers exposed to the harness
 - `on_demand_body_tokens`: definition bodies loaded only on invocation
 - `duplicates`: definition names appearing in more than one plugin, each paying for its description
