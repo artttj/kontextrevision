@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from typing import Dict, List, Optional
@@ -204,11 +205,13 @@ def backup_path(path: str) -> str:
 
 def write_atomic(path: str, content: str) -> str:
     """Back up the original, then replace it atomically. Returns backup path."""
+    mode = stat.S_IMODE(os.stat(path).st_mode)
     backup = backup_path(path)
     shutil.copy2(path, backup)
     tmp = "{0}.tmp.{1}".format(path, os.getpid())
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(content)
+    os.chmod(tmp, mode)
     os.replace(tmp, path)
     return backup
 
@@ -287,6 +290,13 @@ def apply_file(path, new_content, force=False, allow_growth=False, dry_run=False
         return _result("refused",
                        "{0} keep marker(s) have no closing tag; fix the markers "
                        "before revising".format(unpaired),
+                       before, after)
+
+    proposed_unpaired = unpaired_keep_markers(new_content)
+    if proposed_unpaired > 0:
+        return _result("refused",
+                       "{0} keep marker(s) in the proposed rewrite are unpaired; "
+                       "fix the markers before revising".format(proposed_unpaired),
                        before, after)
 
     dropped = missing_keep_blocks(original, new_content)

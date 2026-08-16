@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 import subprocess
 import sys
 
@@ -36,6 +37,13 @@ def test_write_atomic_leaves_no_temp_files(tmp_path):
     target = write(tmp_path, "AGENTS.md", "original\n")
     apply.write_atomic(target, "replaced\n")
     assert [n for n in os.listdir(str(tmp_path)) if ".tmp." in n] == []
+
+
+def test_write_atomic_preserves_file_mode(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "private\n")
+    os.chmod(target, 0o600)
+    apply.write_atomic(target, "rewritten\n")
+    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
 
 
 def test_extract_keep_blocks_returns_protected_content():
@@ -192,6 +200,33 @@ def test_apply_refuses_unpaired_keep_marker(tmp_path):
     assert "closing" in res["reason"]
     with open(target, encoding="utf-8") as fh:
         assert "DO NOT LOSE THIS" in fh.read()
+
+
+def test_apply_refuses_proposed_unmatched_open_marker(tmp_path):
+    original = "# Rules\n" + "Keep this instruction clear and stable.\n" * 20
+    rewritten = ("# Rules\n<!-- kontextrevision:keep -->\n" +
+                 "Keep this instruction clear.\n" * 20)
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "refused"
+    assert "proposed" in res["reason"]
+
+
+def test_apply_refuses_proposed_unmatched_close_marker(tmp_path):
+    original = "# Rules\n" + "Keep this instruction clear and stable.\n" * 20
+    rewritten = ("# Rules\n<!-- /kontextrevision:keep -->\n" +
+                 "Keep this instruction clear.\n" * 20)
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "refused"
+    assert "proposed" in res["reason"]
+
+
+def test_apply_allows_proposed_paired_keep_markers(tmp_path):
+    original = "# Rules\n" + "Keep this instruction clear and stable.\n" * 20
+    rewritten = ("# Rules\n<!-- kontextrevision:keep -->\nPreserve this.\n"
+                 "<!-- /kontextrevision:keep -->\n" +
+                 "Keep this instruction clear.\n" * 18)
+    res = apply.apply_file(write(tmp_path, "AGENTS.md", original), rewritten)
+    assert res["status"] == "written"
 
 
 def test_apply_refuses_symlink(tmp_path):
