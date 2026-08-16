@@ -463,11 +463,10 @@ def _find_mirrors(files: List[Dict], root: str):
 
 
 def build_digest(root: str, cwd: Optional[str] = None) -> Dict:
-    """Digest everything under root that costs tokens on every session.
+    """Digest instruction scope and harness definitions under root.
 
-    Instruction files and harness definitions are both always-on, but a
-    definition's body is not: it loads only when invoked. The two are reported
-    separately so they are never compared as though they cost the same.
+    Instruction files are split by current and conditional scope. Definition
+    descriptions and on-demand bodies are reported separately.
     """
     scope_root = _scan_root(root)
     selected_cwd = os.path.abspath(cwd or scope_root)

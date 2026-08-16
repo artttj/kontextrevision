@@ -1,7 +1,7 @@
 {
   "name": "kontextrevision",
   "version": "1.0.0",
-  "description": "Revises agent instruction files in place: bloat removed, duplicates merged, misplaced rules routed, cross-layer conflicts reported.",
+  "description": "Reviews and revises agent instruction stacks: structure clarified, dead context removed, scope corrected, and cross-harness conflicts surfaced.",
   "author": "Artem Iagovdik",
   "license": "MIT"
 }

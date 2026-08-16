@@ -11,6 +11,10 @@ order, with one file retained per repository across the whole sample. Each file
 was fetched from its repository's current default branch and scanned with
 `scan.py`.
 
+The corpus was re-measured after section identity changed from one normalized
+body hash to separate exact and normalized hashes. Size, section, and command
+counts remained unchanged.
+
 Token counts use the scanner's documented character-count estimate. The p90 is
 the nearest-rank 90th percentile. GitHub search order and repository contents
 change, so these figures describe the dated snapshot rather than a permanent
@@ -63,6 +67,7 @@ invisible-Unicode cleanup feature on this evidence.
 python3 skills/kontextrevision/scripts/scan.py <downloaded-corpus-root>
 ```
 
-The scanner emits file roles, byte sizes, token estimates, normalized full-file
-and section hashes, recognized commands, and referenced paths. It never emits
-file bodies.
+The scanner emits file roles, scopes, harness coverage, load conditions, byte
+sizes, token estimates, normalized full-file hashes, exact and normalized
+section hashes, recognized commands, and referenced paths. It never emits file
+bodies.

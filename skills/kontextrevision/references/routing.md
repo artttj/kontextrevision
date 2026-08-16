@@ -1,78 +1,102 @@
 # Routing and precedence
 
-## Which destination a rule belongs in
+## Three routing dimensions
 
-| Destination | Test |
+Judge every instruction along three independent dimensions.
+
+| Dimension | Choices | Question |
+|---|---|---|
+| **Scope** | global, project, subtree | Where should this instruction apply? |
+| **Delivery** | instruction file, skill, hook, CI | When and how must it enter behavior? |
+| **Harness coverage** | Claude Code, Codex, OpenCode, Nous, other | Which tools must receive it? |
+
+Do not infer subject-matter roles from filenames. `AGENTS.md` and `CLAUDE.md`
+both carry project conventions, commands, workflow, architecture, environment
+quirks, and gotchas. They are primarily native adapters for different harnesses,
+not semantic layers.
+
+## Scope
+
+| Scope | Test |
 |---|---|
-| `SOUL.md` | Follows you everywhere. Voice, directness, how to handle uncertainty. True in every project you will ever open. |
-| `AGENTS.md` | Belongs to this project. Conventions, workflow, domain constraints. |
-| `CLAUDE.md` | Repo mechanics. Commands, entry points, gotchas. |
-| **A skill** (`.claude/skills/`) | Only relevant for one kind of task. Loading it every session pays a permanent cost for occasional value. |
-| **A hook** (`.claude/settings.json`) | Must happen every time with no exceptions. Instructions are advisory, hooks are deterministic. |
-| **CI** | A violation should block a merge. An instruction file is not a substitute for automated enforcement. |
+| **Global** | The instruction should follow the user into every project used with that harness. |
+| **Project** | The instruction applies across one repository. |
+| **Subtree** | The instruction applies only while working below one directory. |
 
-The last three come from [Anthropic's best practices](https://code.claude.com/docs/en/best-practices)
-and are the moves most people miss. Deleting a rule loses it. Moving it to a
-skill or a hook keeps it and stops paying for it on every session.
+Put an instruction at the narrowest scope that covers every place it is needed.
+Moving a package rule from the project root into that package reduces irrelevant
+context. Moving it between `AGENTS.md` and `CLAUDE.md` changes harness coverage
+and is not a scope correction.
 
-Nous states the first two directly: if it should follow you everywhere it belongs
-in `SOUL.md`, if it belongs to a project it belongs in `AGENTS.md`.
+`SOUL.md` is a global identity mechanism for harnesses that support it. Voice,
+directness, and handling uncertainty can belong there. Project conventions do
+not.
 
-`SOUL.md` is injected at slot #1 of the system prompt, ahead of tools, memory,
-and project context. A repo convention parked there costs identity-slot tokens in
-every project you open, so misrouting into `SOUL.md` is the most expensive
-mistake in the stack. Check that file first.
+## Delivery
 
-## Precedence when layers conflict
+| Delivery | Test |
+|---|---|
+| **Instruction file** | The rule must guide the model whenever its scope is active. |
+| **Skill** | The knowledge matters only for a recognizable kind of task. |
+| **Hook** | A supported harness must perform an action deterministically at a defined event. |
+| **CI** | A violation should block integration regardless of which agent or human made the change. |
 
-Most specific wins. A project `AGENTS.md` overrides a global `CLAUDE.md`.
+The last three are recommendations in this release. Report the source, proposed
+delivery class, reason, and coverage impact. Do not create a skill, hook, hook
+script, settings entry, or CI workflow silently.
 
-When two layers contradict, report both locations with line numbers and state
-which one currently wins. **Do not resolve the conflict by deleting one side.**
-The user wrote both rules and only they know which one they meant. Silently
-picking a winner is how a tool destroys work it does not understand.
+## Harness-native destinations
+
+| Destination | Known coverage |
+|---|---|
+| `AGENTS.md` | Codex and OpenCode |
+| `CLAUDE.md`, `.claude/rules/*.md` | Claude Code |
+| `SOUL.md` | Nous and compatible harnesses |
+
+The scanner reports this mapping under `harnesses`. Treat it as the coverage to
+preserve, not as proof that every harness has identical precedence behavior.
+Custom fallback filenames and explicit imports can change loading. When a
+repository configures them, report that configuration rather than applying the
+default table blindly.
+
+## Precedence is per harness
+
+Claude Code loads `CLAUDE.md` files above the working directory and discovers
+subtree files when it accesses those directories. Codex loads `AGENTS.md` files
+from the project root to the current working directory. OpenCode loads its own
+supported instruction path. These are separate chains.
+
+When two applicable instructions contradict, report both locations, scopes,
+harnesses, and the winner only when that harness's precedence is known. Do not
+claim that an `AGENTS.md` file overrides a `CLAUDE.md` file. Do not delete either
+side to resolve a conflict the user has not decided.
 
 ## Moving a rule
 
-A move is two edits against two files, and the pair is not atomic. Once the
-source is rewritten it becomes git-dirty, so a second `apply.py` call to put it
-back would hit the dirty-file guard and refuse. Preflight both writes before
-changing anything:
+A move between two files is not atomic. Preflight both writes:
 
-1. `--dry-run` the removal from the source.
-2. `--dry-run` the addition to the destination, with `--allow-growth`.
-3. Only if **both** report `dry_run` rather than `refused`, run them for real in
-   the same order.
+1. Run the source removal with `--dry-run`.
+2. Run the destination addition with `--dry-run --allow-growth`.
+3. Confirm that the destination preserves every required harness.
+4. Apply the source and destination changes only when both preflights pass.
 
-If the destination write still fails after a successful preflight, roll the
-source back from its backup:
+If the destination write fails after the source write, roll back the source:
 
 ```bash
 python3 skills/kontextrevision/scripts/apply.py <source> --rollback
 ```
 
-`--rollback` restores the most recent backup and deletes it. It bypasses the
-guards on purpose, because restoring a known-good backup cannot lose work.
+Rollback is transaction-bound. It proceeds only while the source still matches
+the revision written by `apply.py`. If another edit occurred, it refuses instead
+of overwriting that work.
 
-Never leave a half-move in place. A rule that exists in neither file is the one
-outcome worse than a rule in the wrong file.
+## Mirrored files preserve coverage
 
-## What routing is not
+Identical `AGENTS.md` and `CLAUDE.md` files in one directory can deliberately
+carry the same rules to different harnesses. No single-harness session pays for
+both copies, so the scanner reports the pair under `mirrors` and counts it once
+within its load tier.
 
-Do not reorganize a file that is already correctly scoped just because you can
-see a tidier arrangement. Routing moves a rule when it is in the wrong file, not
-when it is in an unfamiliar order.
-
-## Mirrored files are not duplication
-
-A repository that ships an `AGENTS.md` and a `CLAUDE.md` with identical content
-is doing cross-tool compatibility on purpose. Codex and several other harnesses
-read `AGENTS.md`, Claude Code reads `CLAUDE.md`. No session loads both, so the
-pair costs what one file costs.
-
-Never report a mirrored pair as wasted tokens, and never propose deleting one
-side. The digest reports these under `mirrors` and already counts them once.
-
-The one improvement worth suggesting: replace the non-canonical copy with a
-one-line import so the two cannot drift apart. That is a maintenance argument,
-not a token argument, and the user may reasonably decline it.
+Never remove one copy as waste. A supported include mechanism can make one file
+canonical and prevent drift, but suggest that only after verifying the receiving
+harness resolves the include and coverage remains unchanged.

@@ -7,7 +7,7 @@
     {
       "name": "kontextrevision",
       "source": "./",
-      "description": "Revises SOUL.md, AGENTS.md, and CLAUDE.md in place, with git, keep-marker, and growth guards."
+      "description": "Reviews and revises the structure, scope, loading, and harness coverage of SOUL.md, AGENTS.md, and CLAUDE.md with guarded write-back."
     }
   ]
 }
