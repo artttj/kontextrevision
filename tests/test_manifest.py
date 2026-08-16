@@ -11,12 +11,23 @@ def test_plugin_manifest_is_valid_json_with_required_keys():
     assert data["name"] == "kontextrevision"
     assert data["version"]
     assert data["description"]
+    assert data["author"] == {
+        "name": "Artem Iagovdik",
+        "email": "artyom.yagovdik@gmail.com",
+        "url": "https://github.com/artttj",
+    }
 
 
 def test_plugin_versions_match_release():
     for directory in [".claude-plugin", ".codex-plugin"]:
         with open(os.path.join(ROOT, directory, "plugin.json"), encoding="utf-8") as fh:
             assert json.load(fh)["version"] == "1.0.0"
+
+
+def test_plugin_authors_share_contact_email():
+    for directory in [".claude-plugin", ".codex-plugin"]:
+        with open(os.path.join(ROOT, directory, "plugin.json"), encoding="utf-8") as fh:
+            assert json.load(fh)["author"]["email"] == "artyom.yagovdik@gmail.com"
 
 
 def test_codex_plugin_uses_shared_skill_tree():
@@ -26,10 +37,25 @@ def test_codex_plugin_uses_shared_skill_tree():
     assert os.path.exists(os.path.join(ROOT, data["skills"], "kontextrevision", "SKILL.md"))
 
 
+def test_codex_marketplace_points_to_repository_plugin():
+    path = os.path.join(ROOT, ".agents", "plugins", "marketplace.json")
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    assert data["name"] == "kontextrevision"
+    assert data["interface"]["displayName"] == "Kontextrevision"
+    assert data["plugins"] == [{
+        "name": "kontextrevision",
+        "source": {"source": "local", "path": "./"},
+        "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+        "category": "Developer Tools",
+    }]
+
+
 def test_marketplace_manifest_lists_the_plugin():
     with open(os.path.join(ROOT, ".claude-plugin", "marketplace.json"), encoding="utf-8") as fh:
         data = json.load(fh)
     assert data["name"] == "kontextrevision"
+    assert data["description"]
     assert "kontextrevision" in [p["name"] for p in data["plugins"]]
 
 
@@ -79,6 +105,9 @@ def test_readme_documents_supported_tool_installation():
         text = fh.read()
     assert "actions/workflows/tests.yml/badge.svg" in text
     assert "### Claude Code" in text
+    assert "/plugin marketplace add artttj/kontextrevision" in text
+    assert "/plugin install kontextrevision@kontextrevision" in text
+    assert "/kontextrevision:kontextrevision" in text
     assert "### Codex" in text
     assert "codex plugin marketplace add artttj/kontextrevision" in text
     assert "### OpenCode" in text

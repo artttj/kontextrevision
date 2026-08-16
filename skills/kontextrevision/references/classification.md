@@ -94,9 +94,8 @@ The digest lists every command the file references. Check each one against the
 repo before keeping it. A rule pointing at a command that does not exist is
 worse than no rule, because the agent will try it.
 
-Measured across 250 real repositories, 3.6% of command references point
-at nothing. Verify carefully, because naive checking is wrong far more often
-than that number suggests:
+Verify carefully, because naive checking produced false accusations during the
+corpus study:
 
 - **Follow `include` directives recursively.** Makefiles routinely split targets
   across included files, and includes nest. A target missing from the root
@@ -107,24 +106,24 @@ than that number suggests:
   inside a git submodule, or is built from a variable or glob, say nothing about
   that file's commands.
 
-Naive checking produced a 12.9% dead-command rate against this corpus. Correct
-checking produces 3.6%. The entire difference was false accusations against real
-projects, including Google, OpenShift, and Exoscale. Say nothing rather than say
-something wrong.
+The invalidated measurement mixed a narrower command extractor with incomplete
+manifest resolution. It was withdrawn rather than reused after the extractor
+changed. Say nothing rather than accuse a real project on incomplete evidence.
 
 ## Merging
 
-Two rules saying the same thing in different words is the most common defect in
-a file that several people have edited over time. Merge them into the stronger
-wording and delete the weaker one. Identical section hashes in the digest find
-the exact duplicates. The near-duplicates need reading.
+Two rules saying the same thing in different words are a common defect in files
+edited by several people. Hashes only identify candidates. `exact_hash` includes
+the heading, level, and byte-preserved body. `normalized_hash` tolerates
+formatting differences. Open both blocks with their surrounding hierarchy,
+confirm that scope and meaning match, then merge into the stronger wording.
 
 ## Two destinations that are not deletion
 
 Anthropic's guidance names two places a rule can go instead of being removed.
 Prefer these over deletion when they apply.
 
-**Convert to a hook.** *"If Claude already does something correctly without the
+**Recommend a hook.** *"If Claude already does something correctly without the
 instruction, delete it or convert it to a hook."* Hooks are deterministic while
 instruction files are advisory: *"Unlike CLAUDE.md instructions which are
 advisory, hooks are deterministic and guarantee the action happens."* A rule
@@ -134,7 +133,7 @@ not in prose that the model may or may not follow.
 If a violation would fail CI, the rule belongs in CI. An instruction file is not
 a substitute for automated enforcement.
 
-**Move to a skill.** *"For domain knowledge or workflows that are only relevant
+**Recommend a skill.** *"For domain knowledge or workflows that are only relevant
 sometimes, use skills instead. Claude loads them on demand without bloating
 every conversation."* This is the highest-value move available: a block that
 only matters for one kind of task is paying on every session for value it

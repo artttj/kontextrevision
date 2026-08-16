@@ -1,0 +1,20 @@
+{
+  "name": "kontextrevision",
+  "interface": {
+    "displayName": "Kontextrevision"
+  },
+  "plugins": [
+    {
+      "name": "kontextrevision",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
