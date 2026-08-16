@@ -1,6 +1,6 @@
 {
   "name": "kontextrevision",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Revises agent instruction files in place: bloat removed, duplicates merged, misplaced rules routed, cross-layer conflicts reported.",
   "author": "Artem Iagovdik",
   "license": "MIT"

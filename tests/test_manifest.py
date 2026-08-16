@@ -13,6 +13,19 @@ def test_plugin_manifest_is_valid_json_with_required_keys():
     assert data["description"]
 
 
+def test_plugin_versions_match_release():
+    for directory in [".claude-plugin", ".codex-plugin"]:
+        with open(os.path.join(ROOT, directory, "plugin.json"), encoding="utf-8") as fh:
+            assert json.load(fh)["version"] == "1.0.0"
+
+
+def test_codex_plugin_uses_shared_skill_tree():
+    with open(os.path.join(ROOT, ".codex-plugin", "plugin.json"), encoding="utf-8") as fh:
+        data = json.load(fh)
+    assert data["skills"] == "./skills/"
+    assert os.path.exists(os.path.join(ROOT, data["skills"], "kontextrevision", "SKILL.md"))
+
+
 def test_marketplace_manifest_lists_the_plugin():
     with open(os.path.join(ROOT, ".claude-plugin", "marketplace.json"), encoding="utf-8") as fh:
         data = json.load(fh)
