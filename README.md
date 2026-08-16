@@ -40,13 +40,31 @@ The name combines the German *Kontext* and *Revision*: a revision pass over the 
 
 ## Quick install
 
-**Claude Code:** `/plugin marketplace add artttj/kontextrevision`, then `/plugin install kontextrevision@kontextrevision`
+Run the commands for your tool, or ask your agent to install `artttj/kontextrevision`.
 
-**Codex:** `codex plugin marketplace add artttj/kontextrevision`, then `codex plugin add kontextrevision@kontextrevision`
+### Claude Code
 
-**OpenCode:** clone the repository, then link `skills/kontextrevision` into `~/.config/opencode/skills/kontextrevision`.
+```text
+/plugin marketplace add artttj/kontextrevision
+/plugin install kontextrevision@kontextrevision
+```
 
-See [Install](#install) for the OpenCode commands and native invocation forms.
+### Codex
+
+```bash
+codex plugin marketplace add artttj/kontextrevision
+codex plugin add kontextrevision@kontextrevision
+```
+
+### OpenCode
+
+```bash
+git clone https://github.com/artttj/kontextrevision ~/.local/share/kontextrevision
+mkdir -p ~/.config/opencode/skills
+ln -s ~/.local/share/kontextrevision/skills/kontextrevision ~/.config/opencode/skills/kontextrevision
+```
+
+See [Install](#install) for native invocation forms.
 
 ## Case studies
 
