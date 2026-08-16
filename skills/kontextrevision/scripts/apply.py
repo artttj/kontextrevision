@@ -261,17 +261,17 @@ def rollback(path):
     if current != expected:
         return _result("refused", "file changed since the guarded write; rollback would lose edits",
                        0, 0)
-    with open(backup, "r", encoding="utf-8") as fh:
+    with open(backup, "rb") as fh:
         content = fh.read()
     mode = stat.S_IMODE(os.stat(backup).st_mode)
     tmp = "{0}.tmp.{1}".format(path, os.getpid())
-    with open(tmp, "w", encoding="utf-8") as fh:
+    with open(tmp, "wb") as fh:
         fh.write(content)
     os.chmod(tmp, mode)
     os.replace(tmp, path)
     os.remove(backup)
     os.remove(transaction)
-    return _result("rolled_back", None, 0, estimate_tokens(content))
+    return _result("rolled_back", None, 0, estimate_tokens(content.decode("utf-8")))
 
 
 def apply_file(path, new_content, force=False, allow_growth=False, dry_run=False,

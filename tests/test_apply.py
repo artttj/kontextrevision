@@ -442,3 +442,14 @@ def test_rollback_restores_backup_mode(tmp_path):
     result = apply.rollback(target)
     assert result["status"] == "rolled_back"
     assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
+
+
+def test_rollback_restores_backup_bytes(tmp_path):
+    target = os.path.join(str(tmp_path), "AGENTS.md")
+    with open(target, "wb") as fh:
+        fh.write(b"original\r\ncontent\r\n")
+    apply.write_atomic(target, "rewritten\n")
+    result = apply.rollback(target)
+    assert result["status"] == "rolled_back"
+    with open(target, "rb") as fh:
+        assert fh.read() == b"original\r\ncontent\r\n"
