@@ -1,6 +1,6 @@
 {
   "name": "kontextrevision",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Reviews and revises agent instruction stacks: structure clarified, dead context removed, scope corrected, and cross-harness conflicts surfaced.",
   "author": {
     "name": "Artem Iagovdik",

@@ -38,6 +38,16 @@ Real `--dry-run` output from [PaloAltoNetworks/docusaurus-openapi-docs](https://
 
 The name combines the German *Kontext* and *Revision*: a revision pass over the context.
 
+## Quick install
+
+**Claude Code:** `/plugin marketplace add artttj/kontextrevision`, then `/plugin install kontextrevision@kontextrevision`
+
+**Codex:** `codex plugin marketplace add artttj/kontextrevision`, then `codex plugin add kontextrevision@kontextrevision`
+
+**OpenCode:** clone the repository, then link `skills/kontextrevision` into `~/.config/opencode/skills/kontextrevision`.
+
+See [Install](#install) for the OpenCode commands and native invocation forms.
+
 ## Case studies
 
 Real `--dry-run` revisions from 2026-08-16. Token counts are estimates. No upstream repository was modified.
