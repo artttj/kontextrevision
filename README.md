@@ -6,7 +6,7 @@
 [![Tests](https://github.com/artttj/kontextrevision/actions/workflows/tests.yml/badge.svg)](https://github.com/artttj/kontextrevision/actions/workflows/tests.yml)
 [![Claude Code](https://img.shields.io/badge/claude%20code-plugin-8A63D2.svg)](https://claude.com/claude-code)
 
-> **Unattended reviser for agent instruction stacks.** Removes dead context, sharpens the rules that matter, and puts each instruction where it belongs.
+> **Guarded reviser for agent instruction stacks.** Removes dead context, sharpens the rules that matter, and puts each instruction where it belongs.
 
 Kontextrevision is not a minifier. It reviews the architecture of agent context:
 
@@ -19,8 +19,6 @@ Kontextrevision is not a minifier. It reviews the architecture of agent context:
 - writes through git, keep-marker, growth, invention, and backup guards
 
 Persistent instruction files consume model context whenever their scope is active. The problem is not simply token count. Important rules compete with discoverable facts, instructions load at the wrong scope, guidance is duplicated across tools, and requirements get buried in prose.
-
-Anthropic's [best-practices guide](https://code.claude.com/docs/en/best-practices) states the cost directly: *"Bloated CLAUDE.md files cause Claude to ignore your actual instructions."* The problem is not the tokens, it is the rules you care about getting lost among the ones you do not.
 
 ```console
 $ /kontextrevision:kontextrevision AGENTS.md
@@ -38,7 +36,22 @@ $ /kontextrevision:kontextrevision AGENTS.md
 
 Real `--dry-run` output from [PaloAltoNetworks/docusaurus-openapi-docs](https://github.com/PaloAltoNetworks/docusaurus-openapi-docs). An agent cannot pass or fail "consider how". It can pass or fail "do not introduce". Same requirement, now checkable, and nothing was invented to get there.
 
-*Kontextrevision* is German for a revision pass over the context.
+The name combines the German *Kontext* and *Revision*: a revision pass over the context.
+
+## Case studies
+
+Real `--dry-run` revisions from 2026-08-16. Token counts are estimates. No upstream repository was modified.
+
+| Repository | Estimated change | What changed and why |
+|---|---:|---|
+| [joe-bell/cva](https://github.com/joe-bell/cva) ⭐ 6.9k | 8,176 → 5,372 (**−34%**) | Removed 1,828 tokens that duplicated installed skill guidance already available to the harness |
+| [electron/electron](https://github.com/electron/electron) ⭐ 122k | 2,688 → 2,256 (**−16%**) | Removed discoverable project-overview, directory-tree, and key-file summaries |
+| [denoland/deno](https://github.com/denoland/deno) ⭐ 108k | 2,965 → 2,651 (**−11%**) | Removed a hand-maintained table of contents that duplicated the document's heading structure |
+| [egraphs-good/egglog](https://github.com/egraphs-good/egglog) ⭐ 817 | 408 → 272 (**−33%**) | Removed a directory inventory the agent can recover directly from the repository tree |
+
+These are context-revision results, not claims about task-completion quality or model performance. The full methodology and limitations are documented in [the corpus findings](docs/proof/2026-08-16-corpus-findings.md).
+
+For contrast, [microsoft/vscode](https://github.com/microsoft/vscode) ⭐ 189k ships a **67-token** `AGENTS.md` with nothing to cut. A mirrored `AGENTS.md` and `CLAUDE.md` pair is detected as cross-tool compatibility, not waste, and counted once within its load tier.
 
 ## Install
 
@@ -136,21 +149,6 @@ This survives byte for byte.
 > [!WARNING]
 > The invention guard compares command references, so it catches a rewrite that introduces `make deploy` out of nowhere. It cannot detect an invented *requirement* that names no command. Sharpening wording is safe to run unattended. Turning a vague rule into a specific procedure is a judgment call, and the skill is instructed to propose those rather than write them.
 
-## Case studies
-
-Real `--dry-run` revisions from 2026-08-16. Token counts are estimates. No upstream repository was modified.
-
-| Repository | Estimated change | What changed and why |
-|---|---:|---|
-| [joe-bell/cva](https://github.com/joe-bell/cva) ⭐ 6.9k | 8,176 → 5,372 (**−34%**) | Removed 1,828 tokens that duplicated installed skill guidance already available to the harness |
-| [electron/electron](https://github.com/electron/electron) ⭐ 122k | 2,688 → 2,256 (**−16%**) | Removed discoverable project-overview, directory-tree, and key-file summaries |
-| [denoland/deno](https://github.com/denoland/deno) ⭐ 108k | 2,965 → 2,651 (**−11%**) | Removed a hand-maintained table of contents that duplicated the document's heading structure |
-| [egraphs-good/egglog](https://github.com/egraphs-good/egglog) ⭐ 817 | 408 → 272 (**−33%**) | Removed a directory inventory the agent can recover directly from the repository tree |
-
-These are context-revision results, not claims about task-completion quality or model performance. The full methodology and limitations are documented in [the corpus findings](docs/proof/2026-08-16-corpus-findings.md).
-
-For contrast, [microsoft/vscode](https://github.com/microsoft/vscode) ⭐ 189k ships a **67-token** `AGENTS.md` with nothing to cut. A mirrored `AGENTS.md` and `CLAUDE.md` pair is detected as cross-tool compatibility, not waste, and counted once within its load tier.
-
 ## How it compares
 
 | Tool | Difference |
@@ -163,5 +161,7 @@ For contrast, [microsoft/vscode](https://github.com/microsoft/vscode) ⭐ 189k s
 This one reviews the instruction system around the agent, then continues through guarded rewrite, scope-aware routing, and write-back.
 
 ## Why
+
+Anthropic's [best-practices guide](https://code.claude.com/docs/en/best-practices) names one failure mode directly: *"Bloated CLAUDE.md files cause Claude to ignore your actual instructions."*
 
 The evidence is mixed: repository instructions can change cost, exploration, and task success, but shorter files are not inherently better. The claim here stays narrow: preserve specific operational knowledge, remove context that does no work, and make what remains easier to follow. The direct studies and adjacent long-context research are summarized in [the research reference](skills/kontextrevision/references/research.md).
