@@ -1,9 +1,10 @@
 {
   "name": "kontextrevision",
-  "version": "1.0.0",
-  "description": "Revises agent instruction files in place: bloat removed, duplicates merged, misplaced rules routed, cross-layer conflicts reported.",
+  "version": "1.0.1",
+  "description": "Reviews and revises agent instruction stacks: structure clarified, dead context removed, scope corrected, and cross-harness conflicts surfaced.",
   "author": {
     "name": "Artem Iagovdik",
+    "email": "artyom.yagovdik@gmail.com",
     "url": "https://github.com/artttj"
   },
   "homepage": "https://github.com/artttj/kontextrevision#readme",
@@ -18,8 +19,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Kontextrevision",
-    "shortDescription": "Tighten agent instruction files safely",
-    "longDescription": "Remove ineffective context, merge duplicate rules, route misplaced guidance, and surface conflicts without inventing new instructions.",
+    "shortDescription": "Review agent context architecture safely",
+    "longDescription": "Review scope, structure, loading, and harness coverage, then remove ineffective context, merge duplicate rules, and surface conflicts without inventing instructions.",
     "developerName": "Artem Iagovdik",
     "category": "Developer Tools",
     "capabilities": [

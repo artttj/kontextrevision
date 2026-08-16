@@ -1,7 +1,11 @@
 {
   "name": "kontextrevision",
-  "version": "1.0.0",
-  "description": "Revises agent instruction files in place: bloat removed, duplicates merged, misplaced rules routed, cross-layer conflicts reported.",
-  "author": "Artem Iagovdik",
+  "version": "1.0.1",
+  "description": "Reviews and revises agent instruction stacks: structure clarified, dead context removed, scope corrected, and cross-harness conflicts surfaced.",
+  "author": {
+    "name": "Artem Iagovdik",
+    "email": "artyom.yagovdik@gmail.com",
+    "url": "https://github.com/artttj"
+  },
   "license": "MIT"
 }

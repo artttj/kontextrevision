@@ -53,7 +53,7 @@ From this project's own corpus scan, documented in `docs/proof/`:
 |---|---|
 | `AGENTS.md` median / p90 / largest | 1,044 / 4,100 / 28,430 tokens |
 | `CLAUDE.md` median / p90 / largest | 1,387 / 5,095 / 28,592 tokens |
-| `SOUL.md` median / p90 / largest | 641 / 2,647 / 4,599 tokens |
+| `SOUL.md` median / p90 / largest | 641 / 2,647 / 4,710 tokens |
 | Recognized command references | 738, without a missing-command verdict |
 | Sections in a single file, maximum | 92 |
 | Files containing invisible Unicode | 0 of 250 |

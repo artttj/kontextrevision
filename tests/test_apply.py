@@ -401,11 +401,55 @@ def test_rollback_without_a_backup_reports_cleanly(tmp_path):
 
 def test_rollback_finds_backup_suffix_above_99(tmp_path):
     target = write(tmp_path, "AGENTS.md", "current\n")
-    write(tmp_path, "AGENTS.md.bak", "base\n")
-    write(tmp_path, "AGENTS.md.bak.99", "ninety nine\n")
-    newest = write(tmp_path, "AGENTS.md.bak.100", "one hundred\n")
+    for suffix in [""] + [".{0}".format(n) for n in range(1, 100)]:
+        write(tmp_path, "AGENTS.md.bak" + suffix, "older\n")
+    newest = apply.write_atomic(target, "rewritten\n")
     write(tmp_path, "AGENTS.md.bak.latest", "invalid\n")
     assert apply.rollback(target)["status"] == "rolled_back"
     with open(target, encoding="utf-8") as fh:
-        assert fh.read() == "one hundred\n"
+        assert fh.read() == "current\n"
+    assert newest.endswith(".bak.100")
     assert not os.path.exists(newest)
+
+
+def test_rollback_refuses_after_intervening_edit(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "original\n")
+    backup = apply.write_atomic(target, "written\n")
+    write(tmp_path, "AGENTS.md", "edited later\n")
+    result = apply.rollback(target)
+    assert result["status"] == "refused"
+    assert "changed since" in result["reason"]
+    assert open(target, encoding="utf-8").read() == "edited later\n"
+    assert os.path.exists(backup)
+    assert os.path.exists(backup + ".txn")
+
+
+def test_rollback_refuses_backup_without_transaction_metadata(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "current\n")
+    backup = write(tmp_path, "AGENTS.md.bak", "original\n")
+    result = apply.rollback(target)
+    assert result["status"] == "refused"
+    assert "transaction metadata" in result["reason"]
+    assert open(target, encoding="utf-8").read() == "current\n"
+    assert os.path.exists(backup)
+
+
+def test_rollback_restores_backup_mode(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "private\n")
+    os.chmod(target, 0o600)
+    apply.write_atomic(target, "rewritten\n")
+    os.chmod(target, 0o644)
+    result = apply.rollback(target)
+    assert result["status"] == "rolled_back"
+    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
+
+
+def test_rollback_restores_backup_bytes(tmp_path):
+    target = os.path.join(str(tmp_path), "AGENTS.md")
+    with open(target, "wb") as fh:
+        fh.write(b"original\r\ncontent\r\n")
+    apply.write_atomic(target, "rewritten\n")
+    result = apply.rollback(target)
+    assert result["status"] == "rolled_back"
+    with open(target, "rb") as fh:
+        assert fh.read() == b"original\r\ncontent\r\n"
