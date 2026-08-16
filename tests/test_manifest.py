@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SKILL_DIR = os.path.join(ROOT, "skills", "kontextrevision")
@@ -19,9 +20,13 @@ def test_plugin_manifest_is_valid_json_with_required_keys():
 
 
 def test_plugin_versions_match_release():
+    """Compared against each other, not a literal, so a bump touches two files."""
+    versions = []
     for directory in [".claude-plugin", ".codex-plugin"]:
         with open(os.path.join(ROOT, directory, "plugin.json"), encoding="utf-8") as fh:
-            assert json.load(fh)["version"] == "1.0.4"
+            versions.append(json.load(fh)["version"])
+    assert len(set(versions)) == 1
+    assert re.match(r"^\d+\.\d+\.\d+$", versions[0])
 
 
 def test_plugin_authors_share_contact_email():

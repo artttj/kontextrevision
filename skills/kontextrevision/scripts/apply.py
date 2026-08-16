@@ -11,17 +11,33 @@ import shutil
 import stat
 import subprocess
 import sys
-from typing import Dict, List, Optional
+from typing import List, Optional, Tuple
 
 KEEP_OPEN_RE = re.compile(r"<!--\s*kontextrevision:keep\s*-->")
 KEEP_CLOSE_RE = re.compile(r"<!--\s*/kontextrevision:keep\s*-->")
-KEEP_RE = re.compile(
-    r"<!--\s*kontextrevision:keep\s*-->(.*?)<!--\s*/kontextrevision:keep\s*-->",
-    re.DOTALL,
-)
 
 GROWTH_LIMIT = 1.10
 SHRINK_FLOOR = 0.20
+
+SOUL_NAMES = {"soul.md"}
+AGENTS_NAMES = {"agents.md"}
+CLAUDE_NAMES = {"claude.md", ".claude.md", ".claude.local.md"}
+
+
+def is_instruction_file(path: str) -> bool:
+    """Whether the writer may touch this path at all.
+
+    Duplicated from the scanner rather than imported, because the writer shares
+    no imports with it. A target check that lives only in the reader protects
+    nothing: the agent driving this script chooses the path it passes, and the
+    instruction files this tool rewrites are exactly the ones that tell an agent
+    what to do.
+    """
+    base = os.path.basename(path).lower()
+    if base in SOUL_NAMES or base in AGENTS_NAMES or base in CLAUDE_NAMES:
+        return True
+    parts = [p.lower() for p in path.split(os.sep)]
+    return base.endswith(".md") and ".claude" in parts and "rules" in parts
 
 
 def estimate_tokens(text: str) -> int:
@@ -42,9 +58,61 @@ def normalize_protected(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n").strip("\n")
 
 
+def code_ranges(text: str) -> List[Tuple[int, int]]:
+    """Character ranges holding fenced blocks and inline code spans.
+
+    A marker quoted inside one of these documents the convention instead of
+    instantiating it. This file's own SKILL.md explains keep markers in backticks
+    and has to stay revisable.
+    """
+    ranges = []
+    offset = 0
+    fence = None
+    for line in text.split("\n"):
+        match = FENCE_RE.match(line)
+        opened = False
+        if match:
+            marker = match.group(1)
+            if fence is None:
+                fence, opened = marker, True
+            elif marker[0] == fence[0] and len(marker) >= len(fence):
+                fence = None
+                ranges.append((offset, offset + len(line) + 1))
+        if fence is not None or opened:
+            ranges.append((offset, offset + len(line) + 1))
+        offset += len(line) + 1
+    for m in CODE_SPAN_RE.finditer(text):
+        ranges.append((m.start(), m.end()))
+    return ranges
+
+
+def keep_events(text: str) -> List[Tuple[int, int, int]]:
+    """Live keep markers in document order, as (start, end, delta) triples."""
+    ranges = code_ranges(text)
+    events = []
+    for pattern, delta in ((KEEP_OPEN_RE, 1), (KEEP_CLOSE_RE, -1)):
+        for m in pattern.finditer(text):
+            if any(lo <= m.start() < hi for lo, hi in ranges):
+                continue
+            events.append((m.start(), m.end(), delta))
+    events.sort()
+    return events
+
+
 def extract_keep_blocks(text: str) -> List[str]:
     """Return the content of every paired keep marker, byte-preserving."""
-    return [normalize_protected(m.group(1)) for m in KEEP_RE.finditer(text)]
+    out = []
+    depth, start = 0, 0
+    for begin, end, delta in keep_events(text):
+        if delta == 1:
+            if depth == 0:
+                start = end
+            depth += 1
+        elif depth:
+            depth -= 1
+            if depth == 0:
+                out.append(normalize_protected(text[start:begin]))
+    return out
 
 
 def unpaired_keep_markers(text: str) -> int:
@@ -54,14 +122,8 @@ def unpaired_keep_markers(text: str) -> int:
     stray open nets to zero while leaving a block unprotected. This walks the
     markers in document order instead.
     """
-    events = []
-    for m in KEEP_OPEN_RE.finditer(text):
-        events.append((m.start(), 1))
-    for m in KEEP_CLOSE_RE.finditer(text):
-        events.append((m.start(), -1))
-    events.sort()
     depth, broken = 0, 0
-    for _, delta in events:
+    for _, _, delta in keep_events(text):
         if delta == 1:
             if depth:
                 broken += 1
@@ -90,7 +152,7 @@ def missing_keep_blocks(original: str, new: str) -> List[str]:
     return missing
 
 
-FENCE_RE = re.compile(r"^\s*(```|~~~)")
+FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 CODE_SPAN_RE = re.compile(r"`([^`\n]{1,120})`")
 COMMAND_RE = re.compile(
     r"^((?:npm|yarn|pnpm)\s+(?:run\s+)?[\w:.-]+"
@@ -117,14 +179,25 @@ def _is_real_target(target: str) -> bool:
 
 
 def code_spans(text: str) -> List[str]:
-    """Inline code spans plus fenced-block lines."""
+    """Inline code spans plus fenced-block lines.
+
+    A fence closes only on the character it opened with, at the same length or
+    longer. Toggling on any fence-shaped line lets a stray ~~~ inside a ```
+    block end the block early and hide every command after it.
+    """
     spans = [m.group(1).strip() for m in CODE_SPAN_RE.finditer(text)]
-    in_fence = False
+    fence = None
     for line in text.split("\n"):
-        if FENCE_RE.match(line):
-            in_fence = not in_fence
-            continue
-        if in_fence and line.strip():
+        match = FENCE_RE.match(line)
+        if match:
+            marker = match.group(1)
+            if fence is None:
+                fence = marker
+                continue
+            if marker[0] == fence[0] and len(marker) >= len(fence):
+                fence = None
+                continue
+        if fence is not None and line.strip():
             spans.append(re.sub(r"\s+#.*$", "", line).strip())
     return spans
 
@@ -160,8 +233,8 @@ def invented_commands(original: str, new: str) -> List[str]:
 def in_git_repo(directory: str) -> bool:
     try:
         proc = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"],
-                              cwd=directory, capture_output=True, text=True)
-    except OSError:
+                              cwd=directory, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
         return False
     return proc.returncode == 0 and proc.stdout.strip() == "true"
 
@@ -181,8 +254,8 @@ def is_git_dirty(path: str) -> Optional[bool]:
     try:
         proc = subprocess.run(
             ["git", "status", "--porcelain", "--", os.path.basename(os.path.realpath(path))],
-            cwd=directory, capture_output=True, text=True)
-    except OSError:
+            cwd=directory, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
         return True
     if proc.returncode != 0:
         return True
@@ -195,12 +268,17 @@ def is_git_dirty(path: str) -> Optional[bool]:
 
 
 def backup_path(path: str) -> str:
-    """First free backup name, so the true original is never overwritten."""
+    """First free backup name, so the true original is never overwritten.
+
+    Freshness is tested with lexists, not exists. A dangling symlink parked at
+    the backup name reads as free under exists, and the copy would then follow
+    it and write the original's content wherever it points.
+    """
     candidate = path + ".bak"
-    if not os.path.exists(candidate):
+    if not os.path.lexists(candidate):
         return candidate
     n = 1
-    while os.path.exists("{0}.bak.{1}".format(path, n)):
+    while os.path.lexists("{0}.bak.{1}".format(path, n)):
         n += 1
     return "{0}.bak.{1}".format(path, n)
 
@@ -280,6 +358,16 @@ def apply_file(path, new_content, force=False, allow_growth=False, dry_run=False
     if os.path.islink(path):
         return _result("refused",
                        "refusing to write through a symlink; pass the real path",
+                       0, estimate_tokens(new_content))
+
+    path = os.path.join(os.path.realpath(os.path.dirname(path) or "."),
+                        os.path.basename(path))
+
+    if not is_instruction_file(path):
+        return _result("refused",
+                       "refusing to write to {0!r}; this writer only revises SOUL.md, "
+                       "AGENTS.md, CLAUDE.md and .claude/rules/*.md".format(
+                           os.path.basename(path)),
                        0, estimate_tokens(new_content))
 
     try:

@@ -124,6 +124,7 @@ This rewrites files that govern agent behavior, so every write passes code-enfor
 | **Keep markers** | Protected content was removed or altered |
 | **Growth** | Output grows by more than 10% |
 | **Invention** | A new recognized command reference appears in the rewrite |
+| **Target** | The path is not an instruction file the writer is allowed to revise |
 
 Backups are written before every change and never overwritten. Symlinks and non-UTF-8 files are refused. Mark anything the reviser must not touch:
 

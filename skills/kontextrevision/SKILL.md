@@ -117,12 +117,17 @@ printf '%s' "$NEW_CONTENT" | python3 skills/kontextrevision/scripts/apply.py <pa
 Keep markers are **paired**. A block is protected only when it sits between
 `<!-- kontextrevision:keep -->` and `<!-- /kontextrevision:keep -->`. An opening
 tag alone protects nothing, which is why the writer refuses to run against a file
-that has one.
+that has one. A marker inside a fenced block or backticks documents the
+convention instead of instantiating it, so it is ignored and a file may explain
+keep markers in prose without locking itself.
 
-The writer refuses in seven cases. Every refusal is correct:
+The writer refuses on any of these conditions. Every refusal is correct:
 
 | Refusal | What it means |
 |---|---|
+| not an instruction file | The path is not a `SOUL.md`, `AGENTS.md`, `CLAUDE.md`, or `.claude/rules/*.md`. The writer only revises instruction files, whatever it was asked to open. |
+| symlink | The path itself is a symlink. Pass the real path. |
+| not valid utf-8 | The file cannot be read as text. |
 | uncommitted changes | The file is tracked and has uncommitted edits. Ask the user to commit. Do not pass `--force` on their behalf. Untracked new files are allowed through. |
 | keep block dropped | Content between `<!-- kontextrevision:keep -->` and `<!-- /kontextrevision:keep -->` is no longer inside those markers in your rewrite. Restore it, markers included, and retry. |
 | unpaired keep marker | The original has an opening marker with no closing `<!-- /kontextrevision:keep -->`. Tell the user, do not guess where the block ends. |

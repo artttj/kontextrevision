@@ -453,3 +453,132 @@ def test_rollback_restores_backup_bytes(tmp_path):
     assert result["status"] == "rolled_back"
     with open(target, "rb") as fh:
         assert fh.read() == b"original\r\ncontent\r\n"
+
+
+def test_fence_closes_only_on_a_matching_marker():
+    text = "```bash\nmake build\n~~~\nmake hidden-command\n```\n"
+    assert "make hidden-command" in apply.command_refs(text)
+
+
+def test_fence_does_not_close_on_a_shorter_marker():
+    text = "````markdown\nmake build\n```\nmake still-inside\n````\n"
+    assert apply.command_refs(text) == ["make build", "make still-inside"]
+
+
+def test_fence_closes_on_a_marker_at_least_as_long():
+    text = "```bash\nmake build\n````\nmake outside\n"
+    assert apply.command_refs(text) == ["make build"]
+
+
+def test_apply_refuses_invented_command_hidden_by_a_mismatched_fence(tmp_path):
+    original = "# T\n\nRun the build.\n\n```bash\nmake build\n```\n"
+    target = write(tmp_path, "AGENTS.md", original)
+    rewrite = original.replace("make build\n```",
+                               "make build\n~~~\nmake totally-invented-deploy\n```")
+    result = apply.apply_file(target, rewrite, allow_growth=True)
+    assert result["status"] == "refused"
+    assert "invent" in result["reason"]
+
+
+def test_keep_markers_inside_a_code_span_are_documentation():
+    text = ("Markers are paired: `<!-- kontextrevision:keep -->` opens and\n"
+            "`<!-- /kontextrevision:keep -->` closes. A stray "
+            "`<!-- /kontextrevision:keep -->` protects nothing.\n")
+    assert apply.unpaired_keep_markers(text) == 0
+    assert apply.extract_keep_blocks(text) == []
+
+
+def test_keep_markers_inside_a_fence_are_documentation():
+    text = ("```markdown\n<!-- kontextrevision:keep -->\nexample\n```\n"
+            "Prose after the example.\n")
+    assert apply.unpaired_keep_markers(text) == 0
+
+
+def test_live_keep_markers_outside_code_still_protect():
+    text = "<!-- kontextrevision:keep -->\nprotected\n<!-- /kontextrevision:keep -->\n"
+    assert apply.unpaired_keep_markers(text) == 0
+    assert apply.extract_keep_blocks(text) == ["protected"]
+
+
+def test_apply_revises_a_file_that_documents_the_keep_marker_syntax(tmp_path):
+    body = ("# Guide\n\nA block is protected between `<!-- kontextrevision:keep -->`\n"
+            "and `<!-- /kontextrevision:keep -->`. A lone "
+            "`<!-- /kontextrevision:keep -->` does nothing.\n\nMore prose here.\n")
+    target = write(tmp_path, "AGENTS.md", body)
+    assert apply.apply_file(target, body, dry_run=True)["status"] == "dry_run"
+
+
+def test_backup_name_skips_a_dangling_symlink(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "original content\n")
+    victim = os.path.join(str(tmp_path), "victim.txt")
+    os.symlink(victim, target + ".bak")
+    backup = apply.write_atomic(target, "rewritten content\n")
+    assert backup == target + ".bak.1"
+    assert not os.path.exists(victim)
+
+
+def test_backup_name_is_used_when_free(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "original content\n")
+    assert apply.write_atomic(target, "rewritten content\n") == target + ".bak"
+
+
+def test_apply_refuses_a_path_that_is_not_an_instruction_file(tmp_path):
+    target = write(tmp_path, "bashrc.txt", "alias ll='ls -la'\n")
+    result = apply.apply_file(target, "alias ll='ls -l'\n")
+    assert result["status"] == "refused"
+    assert "only revises" in result["reason"]
+
+
+def test_apply_accepts_a_claude_rules_file(tmp_path):
+    target = write(tmp_path, ".claude/rules/style.md", "Existing rule body here.\n")
+    assert apply.apply_file(target, "Existing rule body.\n", dry_run=True)["status"] == "dry_run"
+
+
+def test_apply_writes_through_a_symlinked_parent_to_the_real_file(tmp_path):
+    real = write(tmp_path, "real/AGENTS.md", "body content long enough\n")
+    os.symlink(os.path.join(str(tmp_path), "real"), os.path.join(str(tmp_path), "link"))
+    result = apply.apply_file(os.path.join(str(tmp_path), "link", "AGENTS.md"),
+                              "body content long\n")
+    assert result["status"] == "written"
+    assert os.path.dirname(result["backup"]) == os.path.dirname(os.path.realpath(real))
+
+
+def test_is_git_dirty_reports_dirty_when_git_cannot_be_run(tmp_path, monkeypatch):
+    git_init(tmp_path)
+    target = write(tmp_path, "AGENTS.md", "committed\n")
+    git_commit_all(tmp_path)
+    assert apply.is_git_dirty(target) is False
+
+    real_run = subprocess.run
+
+    def failing_run(cmd, **kwargs):
+        if cmd[:2] == ["git", "status"]:
+            raise OSError("git is gone")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(apply.subprocess, "run", failing_run)
+    assert apply.is_git_dirty(target) is True
+
+
+def test_apply_refuses_when_the_file_changes_while_guards_run(tmp_path, monkeypatch):
+    target = write(tmp_path, "AGENTS.md", "original body that is long enough\n")
+    real_open = open
+    state = {"reads": 0}
+
+    def racing_open(path, *args, **kwargs):
+        if path == target and "r" in (args[0] if args else kwargs.get("mode", "r")):
+            state["reads"] += 1
+            if state["reads"] == 2:
+                with real_open(target, "w", encoding="utf-8") as fh:
+                    fh.write("someone else wrote this instead\n")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setitem(apply.__builtins__, "open", racing_open)
+    result = apply.apply_file(target, "original body that is long\n")
+    assert result["status"] == "refused"
+    assert "changed on disk" in result["reason"]
+
+
+def test_apply_writes_when_the_file_is_untouched_while_guards_run(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "original body that is long enough\n")
+    assert apply.apply_file(target, "original body that is long\n")["status"] == "written"
