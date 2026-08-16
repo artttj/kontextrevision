@@ -138,16 +138,18 @@ This survives byte for byte.
 
 ## Case studies
 
-Real `--dry-run` passes, 2026-08-16. No upstream repository was modified.
+Real `--dry-run` revisions from 2026-08-16. Token counts are estimates. No upstream repository was modified.
 
-| Repo | Result | What it found |
-|---|---|---|
-| [joe-bell/cva](https://github.com/joe-bell/cva) ⭐ 6.9k | 8,176 → 5,372 (**−34%**) | 1,828 tokens re-describing skills the harness already injects |
-| [electron/electron](https://github.com/electron/electron) ⭐ 122k | 2,688 → 2,256 (**−16%**) | `Project Overview`, `Directory Structure` and `Key Files` |
-| [denoland/deno](https://github.com/denoland/deno) ⭐ 108k | 2,965 → 2,651 (**−11%**) | A hand-written table of contents, in a file no human scrolls |
-| [egraphs-good/egglog](https://github.com/egraphs-good/egglog) ⭐ 817 | 408 → 272 (**−33%**) | A third of the file was a directory listing |
+| Repository | Estimated change | What changed and why |
+|---|---:|---|
+| [joe-bell/cva](https://github.com/joe-bell/cva) ⭐ 6.9k | 8,176 → 5,372 (**−34%**) | Removed 1,828 tokens that duplicated installed skill guidance already available to the harness |
+| [electron/electron](https://github.com/electron/electron) ⭐ 122k | 2,688 → 2,256 (**−16%**) | Removed discoverable project-overview, directory-tree, and key-file summaries |
+| [denoland/deno](https://github.com/denoland/deno) ⭐ 108k | 2,965 → 2,651 (**−11%**) | Removed a hand-maintained table of contents that duplicated the document's heading structure |
+| [egraphs-good/egglog](https://github.com/egraphs-good/egglog) ⭐ 817 | 408 → 272 (**−33%**) | Removed a directory inventory the agent can recover directly from the repository tree |
 
-For contrast, [microsoft/vscode](https://github.com/microsoft/vscode) ⭐ 189k ships a **67-token** `AGENTS.md` with nothing to cut. A mirrored `AGENTS.md` and `CLAUDE.md` pair is detected as cross-tool compatibility, not waste, and counted once within its load tier. Corpus method across 250 repos, and the measurement bugs fixed before publishing any of it, are in [docs/proof](docs/proof/2026-08-16-corpus-findings.md).
+These are context-revision results, not claims about task-completion quality or model performance. The full methodology and limitations are documented in [the corpus findings](docs/proof/2026-08-16-corpus-findings.md).
+
+For contrast, [microsoft/vscode](https://github.com/microsoft/vscode) ⭐ 189k ships a **67-token** `AGENTS.md` with nothing to cut. A mirrored `AGENTS.md` and `CLAUDE.md` pair is detected as cross-tool compatibility, not waste, and counted once within its load tier.
 
 ## How it compares
 
