@@ -346,13 +346,14 @@ def digest_file(path: str) -> Dict:
         "role": classify_role(path),
         "bytes": len(text.encode("utf-8")),
         "est_tokens": estimate_tokens(text),
+        "hash": hashlib.sha256(normalize_body(text).encode("utf-8")).hexdigest()[:12],
         "sections": parse_sections(text),
         "commands": extract_commands(text),
         "paths": extract_paths(text),
     }
 
 
-def _find_mirrors(files: List[Dict]):
+def _find_mirrors(files: List[Dict], root: str):
     """Pair AGENTS.md with an identical CLAUDE.md in the same directory.
 
     Keeping both is deliberate cross-tool compatibility: Codex reads one name and
@@ -367,9 +368,11 @@ def _find_mirrors(files: List[Dict]):
         a, c = roles.get("agents"), roles.get("claude")
         if not a or not c:
             continue
-        a_hashes = [s["hash"] for s in a["sections"]]
-        if a_hashes and a_hashes == [s["hash"] for s in c["sections"]]:
-            mirrors.append(["AGENTS.md", "CLAUDE.md"])
+        if a["bytes"] and a["hash"] == c["hash"]:
+            mirrors.append([
+                os.path.relpath(a["path"], root).replace(os.sep, "/"),
+                os.path.relpath(c["path"], root).replace(os.sep, "/"),
+            ])
             saved += min(a["est_tokens"], c["est_tokens"])
     return mirrors, saved
 
@@ -388,7 +391,7 @@ def build_digest(root: str) -> Dict:
         except (IOError, OSError):
             continue
     harness = build_harness_digest(root)
-    mirrors, mirrored_away = _find_mirrors(files)
+    mirrors, mirrored_away = _find_mirrors(files, root)
     instruction_tokens = sum(f["est_tokens"] for f in files) - mirrored_away
     return {
         "root": root,

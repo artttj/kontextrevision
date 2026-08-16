@@ -2,6 +2,7 @@
 """The only writer. Enforces every safety guard before touching disk."""
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -236,12 +237,18 @@ def rollback(path):
     now git-dirty and would hit that guard. Restoring the known-good backup is
     safe by construction, so it bypasses the guards deliberately.
     """
-    candidates = [path + ".bak"] + [
-        "{0}.bak.{1}".format(path, n) for n in range(1, 100)]
-    existing = [c for c in candidates if os.path.exists(c)]
+    base = path + ".bak"
+    existing = []
+    for candidate in glob.glob(base + "*"):
+        if candidate == base:
+            existing.append((0, candidate))
+            continue
+        match = re.match(r"^{0}\.(\d+)$".format(re.escape(base)), candidate)
+        if match:
+            existing.append((int(match.group(1)), candidate))
     if not existing:
         return _result("refused", "no backup found for {0}".format(path), 0, 0)
-    backup = existing[-1]
+    backup = max(existing, key=lambda item: item[0])[1]
     with open(backup, "r", encoding="utf-8") as fh:
         content = fh.read()
     tmp = "{0}.tmp.{1}".format(path, os.getpid())

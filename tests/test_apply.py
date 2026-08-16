@@ -397,3 +397,15 @@ def test_rollback_restores_from_backup_despite_dirty_guard(tmp_path):
 def test_rollback_without_a_backup_reports_cleanly(tmp_path):
     target = write(tmp_path, "AGENTS.md", "untouched\n")
     assert apply.rollback(target)["status"] == "refused"
+
+
+def test_rollback_finds_backup_suffix_above_99(tmp_path):
+    target = write(tmp_path, "AGENTS.md", "current\n")
+    write(tmp_path, "AGENTS.md.bak", "base\n")
+    write(tmp_path, "AGENTS.md.bak.99", "ninety nine\n")
+    newest = write(tmp_path, "AGENTS.md.bak.100", "one hundred\n")
+    write(tmp_path, "AGENTS.md.bak.latest", "invalid\n")
+    assert apply.rollback(target)["status"] == "rolled_back"
+    with open(target, encoding="utf-8") as fh:
+        assert fh.read() == "one hundred\n"
+    assert not os.path.exists(newest)
