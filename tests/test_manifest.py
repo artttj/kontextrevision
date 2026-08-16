@@ -11,13 +11,23 @@ def test_plugin_manifest_is_valid_json_with_required_keys():
     assert data["name"] == "kontextrevision"
     assert data["version"]
     assert data["description"]
-    assert data["author"] == {"name": "Artem Iagovdik", "url": "https://github.com/artttj"}
+    assert data["author"] == {
+        "name": "Artem Iagovdik",
+        "email": "artyom.yagovdik@gmail.com",
+        "url": "https://github.com/artttj",
+    }
 
 
 def test_plugin_versions_match_release():
     for directory in [".claude-plugin", ".codex-plugin"]:
         with open(os.path.join(ROOT, directory, "plugin.json"), encoding="utf-8") as fh:
             assert json.load(fh)["version"] == "1.0.0"
+
+
+def test_plugin_authors_share_contact_email():
+    for directory in [".claude-plugin", ".codex-plugin"]:
+        with open(os.path.join(ROOT, directory, "plugin.json"), encoding="utf-8") as fh:
+            assert json.load(fh)["author"]["email"] == "artyom.yagovdik@gmail.com"
 
 
 def test_codex_plugin_uses_shared_skill_tree():

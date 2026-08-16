@@ -4,6 +4,7 @@
   "description": "Reviews and revises agent instruction stacks: structure clarified, dead context removed, scope corrected, and cross-harness conflicts surfaced.",
   "author": {
     "name": "Artem Iagovdik",
+    "email": "artyom.yagovdik@gmail.com",
     "url": "https://github.com/artttj"
   },
   "homepage": "https://github.com/artttj/kontextrevision#readme",
