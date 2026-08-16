@@ -61,7 +61,26 @@ def test_keep_marker_in_skill_matches_the_writer():
     import apply
     with open(os.path.join(SKILL_DIR, "SKILL.md"), encoding="utf-8") as fh:
         text = fh.read()
-    # The marker documented in SKILL.md must be the one apply.py actually honors.
     sample = "<!-- kontextrevision:keep -->\nX\n<!-- /kontextrevision:keep -->"
     assert "kontextrevision:keep" in text
     assert apply.extract_keep_blocks(sample) == ["X"]
+
+
+def test_ci_runs_documented_python_39_suite():
+    workflow = os.path.join(ROOT, ".github", "workflows", "tests.yml")
+    with open(workflow, encoding="utf-8") as fh:
+        text = fh.read()
+    assert 'python-version: "3.9"' in text
+    assert "python3 -m pytest tests/ -q" in text
+
+
+def test_readme_documents_supported_tool_installation():
+    with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
+        text = fh.read()
+    assert "actions/workflows/tests.yml/badge.svg" in text
+    assert "### Claude Code" in text
+    assert "### Codex" in text
+    assert "codex plugin marketplace add artttj/kontextrevision" in text
+    assert "### OpenCode" in text
+    assert "~/.config/opencode/skills/kontextrevision" in text
+    assert "/kontextrevision" in text

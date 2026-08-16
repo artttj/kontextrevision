@@ -1,22 +1,49 @@
 # What the research actually says
 
-Two studies are cited constantly for "keep your AGENTS.md short". They disagree.
+Studies of repository instruction files disagree on whether the files improve
+coding outcomes. The defensible conclusion is not that shorter is always better.
+It is that guidance should preserve specific knowledge the agent cannot reliably
+discover and avoid requirements that do not help the task.
 
-| Paper | Finding |
-|---|---|
-| [Lulla et al., arXiv 2601.20404](https://arxiv.org/abs/2601.20404) | AGENTS.md helps: median runtime down 28.6%, output tokens down 16.6% |
-| [Gloaguen et al., arXiv 2602.11988](https://arxiv.org/abs/2602.11988), ETH Zurich SRI | No completion benefit, over 20% higher inference cost |
+## Direct evidence
 
-The disagreement comes from what each measured. Gloaguen counted total inference
-tokens including the file itself. Lulla counted output tokens and runtime once
-the agent already had the context. They also tested different agent families,
-Codex against Claude. Both are arXiv preprints. Neither has been peer reviewed.
+| Paper | Setting | Finding |
+|---|---|---|
+| [Lulla et al., arXiv 2601.20404](https://arxiv.org/abs/2601.20404) | 124 pull requests across 10 repositories | Adding `AGENTS.md` was associated with 28.6% lower median runtime and 16.6% fewer output tokens, with comparable completion behavior. |
+| [Gloaguen et al., arXiv 2602.11988](https://arxiv.org/abs/2602.11988) | SWE-bench Lite plus 138 CTXbench tasks across several agents and models | Generated context files produced no statistically significant completion gain and raised cost by 20–23%. Human files performed 2.4% better than no context on average, but that difference was not statistically significant. |
+| [McMillan, arXiv 2605.10039](https://arxiv.org/abs/2605.10039) | 1,650 Claude Code sessions and 16,050 function-level observations | File size, instruction position, file architecture, and adjacent conflicts produced no detectable adherence differences within the tested conditions. |
+| [Shepard and Albrecht, arXiv 2606.20512](https://arxiv.org/abs/2606.20512) | SWE-bench Verified with Qwen3.5-35B-A3B | Probe-refined guidance reached a 33.0% mean resolve rate, compared with 28.3% for its static starting point and 25.5% without guidance. The result is tied to one tuning method and primary model. |
+| [Khatri, arXiv 2607.27250](https://arxiv.org/abs/2607.27250) | 288 Claude Code and Codex runs over 17 tasks from 3 repositories | Context strategy did not measurably change correctness. The small task and repository sample limits generalization. |
 
-Supporting work:
+These studies count different costs, use different agents, and test different
+kinds of guidance. Lulla measures runtime and output tokens after context is
+available. Gloaguen includes the wider inference cost and finds that instructions
+change behavior by increasing exploration and testing. Shepard and Albrecht test
+guidance refined against synthetic bug probes rather than ordinary static files.
+McMillan manipulates file structure, while Khatri ablates context strategy on a
+small set of real tasks.
 
-- [arXiv 2605.10039](https://arxiv.org/pdf/2605.10039), instruction adherence against four file-structure variables
-- [arXiv 2606.20512](https://arxiv.org/pdf/2606.20512), probe-and-refine tuning of repository guidance
-- [arXiv 2607.27250](https://arxiv.org/html/2607.27250v1), two-agent ablation on real repositories
+All five are preprints. Their disagreement is evidence against a universal
+performance promise, not evidence that repository guidance never matters.
+
+## Adjacent evidence
+
+- [Liu et al., Lost in the Middle](https://arxiv.org/abs/2307.03172) shows that
+  long-context retrieval depends on the position of relevant information. Its
+  question-answering and retrieval tasks do not test coding-agent instruction
+  files.
+- [Robinette et al., VerIFY](https://aclanthology.org/2026.findings-eacl.254/)
+  measures instruction-following failures in long multi-turn contexts. It is
+  peer reviewed, but evaluates open-source conversational models rather than
+  repository coding tasks.
+- [Jiang et al., LLMLingua](https://aclanthology.org/2023.emnlp-main.825/) and
+  [LongLLMLingua](https://aclanthology.org/2024.acl-long.91/) show that learned
+  prompt compression can reduce cost while preserving or improving results on
+  their benchmarks. Token-level learned compression is not equivalent to an
+  editorial rewrite of `AGENTS.md`.
+
+This work explains plausible mechanisms for distraction and compression, but it
+does not establish that shortening an instruction file improves coding outcomes.
 
 ## Measured against 250 real repositories
 
@@ -33,9 +60,7 @@ From this project's own corpus scan, documented in `docs/proof/`:
 
 ## What to claim
 
-Do not tell the user their agent will get faster. The evidence does not support
-it and two preprints actively contradict each other on the point.
-
-The defensible claim is narrower: these files are injected on every session, so a
-line that does not change behavior bills them on every session. Report the token
-delta and let the number carry the argument.
+Do not promise that revision makes an agent smarter or faster. Do not use file
+length alone as a quality score. Preserve operational knowledge that is specific
+to the repository, remove redundant or ineffective context, report the token
+delta, and let users evaluate whether the remaining instructions change behavior.

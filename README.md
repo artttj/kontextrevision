@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#)
-[![Tests](https://img.shields.io/badge/tests-91%20passing-brightgreen.svg)](tests/)
+[![Tests](https://github.com/artttj/kontextrevision/actions/workflows/tests.yml/badge.svg)](https://github.com/artttj/kontextrevision/actions/workflows/tests.yml)
 [![Claude Code](https://img.shields.io/badge/claude%20code-plugin-8A63D2.svg)](https://claude.com/claude-code)
 
 > Unattended reviser for agent instruction files. Cuts the dead weight and sharpens what stays.
@@ -32,9 +32,32 @@ Real `--dry-run` output from [PaloAltoNetworks/docusaurus-openapi-docs](https://
 
 ## Install
 
+### Claude Code
+
 ```bash
 /plugin marketplace add artttj/kontextrevision
 ```
+
+Invoke it with `/kontextrevision`.
+
+### Codex
+
+```bash
+codex plugin marketplace add artttj/kontextrevision
+codex plugin add kontextrevision@kontextrevision
+```
+
+Invoke it with `$kontextrevision`.
+
+### OpenCode
+
+```bash
+git clone https://github.com/artttj/kontextrevision ~/.local/share/kontextrevision
+mkdir -p ~/.config/opencode/skills
+ln -s ~/.local/share/kontextrevision/skills/kontextrevision ~/.config/opencode/skills/kontextrevision
+```
+
+Invoke it with `/kontextrevision`.
 
 ## Usage
 
@@ -53,7 +76,7 @@ python3 skills/kontextrevision/scripts/scan.py .
 python3 skills/kontextrevision/scripts/scan.py ~/.claude
 ```
 
-It separates `always_on_tokens`, paid every session, from `on_demand_tokens`, paid only on invocation, and lists definitions duplicated across plugins. On the harness this was built with, that split is 72,435 against 2.8M, with 403 duplicated names including 13 separate `code-reviewer` definitions.
+It separates always-on descriptions from on-demand bodies and reports duplicate definitions across plugins.
 
 ## What it does
 
@@ -81,7 +104,7 @@ This rewrites files that govern agent behavior, so every write passes code-enfor
 | **Shrink** | Output falls below 20% of the original |
 | **Keep markers** | Protected content was removed or altered |
 | **Growth** | Output grows by more than 10% |
-| **Invention** | The rewrite names a command the original never mentioned |
+| **Invention** | A new recognized command reference appears in the rewrite |
 
 Backups are written before every change and never overwritten. Symlinks and non-UTF-8 files are refused. Mark anything the reviser must not touch:
 
@@ -102,8 +125,6 @@ Real `--dry-run` passes, 2026-08-16. No upstream repository was modified.
 |---|---|---|
 | [joe-bell/cva](https://github.com/joe-bell/cva) ⭐ 6.9k | 8,176 → 5,372 (**−34%**) | 1,828 tokens re-describing skills the harness already injects |
 | [electron/electron](https://github.com/electron/electron) ⭐ 122k | 2,688 → 2,256 (**−16%**) | `Project Overview`, `Directory Structure` and `Key Files` |
-| [remix-run/react-router](https://github.com/remix-run/react-router) ⭐ 57k | 1,916 → 1,563 (**−18%**) | A fifth of the file was architecture prose and a file inventory |
-| [storybookjs/storybook](https://github.com/storybookjs/storybook) ⭐ 91k | 5,454 → 4,796 (**−12%**) | Three overlapping overviews of the same monorepo |
 | [denoland/deno](https://github.com/denoland/deno) ⭐ 108k | 2,965 → 2,651 (**−11%**) | A hand-written table of contents, in a file no human scrolls |
 | [egraphs-good/egglog](https://github.com/egraphs-good/egglog) ⭐ 817 | 408 → 272 (**−33%**) | A third of the file was a directory listing |
 
@@ -122,6 +143,4 @@ This one continues through the part the others leave manual: rewrite, routing, a
 
 ## Why
 
-Shortening an instruction file does not make an agent smarter, and the research does not claim it does. [Lulla et al.](https://arxiv.org/abs/2601.20404) measured lower runtime and fewer output tokens with repository instructions present. [Gloaguen et al.](https://arxiv.org/abs/2602.11988) measured no completion benefit and higher total inference cost. They counted different things, and both are preprints.
-
-So the claim stays narrow. Remove context that does no work, and make what remains easier to follow.
+The evidence is mixed: repository instructions can change cost, exploration, and task success, but shorter files are not inherently better. The claim here stays narrow: preserve specific operational knowledge, remove context that does no work, and make what remains easier to follow. The direct studies and adjacent long-context research are summarized in [the research reference](skills/kontextrevision/references/research.md).
